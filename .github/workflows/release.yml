@@ -337,9 +337,45 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "v${{ needs.prepare.outputs.version }}" installers/Scrimp-windows-x64-setup.exe --clobber
 
+  # A software bill of materials for each program Scrimp ships: every crate
+  # built into it, with its version and licence, in CycloneDX format. It
+  # answers "is Scrimp affected?" when a crate has a security problem.
+  sbom:
+    name: SBOM
+    needs: prepare
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refs/tags/v${{ needs.prepare.outputs.version }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-cyclonedx@0.5.10
+
+      # Described for Windows, the only platform Scrimp ships for, so crates
+      # used only elsewhere aren't listed.
+      - name: Make the SBOMs
+        run: |
+          cargo cyclonedx -q -f json --describe binaries --target x86_64-pc-windows-msvc --spec-version 1.5
+          cp crates/scrimp-cli/scrimp_bin.cdx.json sbom-scrimp.cdx.json
+          cp crates/scrimpw/scrimpw_bin.cdx.json sbom-scrimpw.cdx.json
+          cp crates/scrimp-shell/scrimp_shell_cdylib-rlib.cdx.json sbom-scrimp_shell.cdx.json
+          for f in sbom-*.cdx.json; do
+            echo "$f: $(jq '.components | length' "$f") components, describing $(jq -r '.metadata.component.name' "$f")"
+          done
+
+      - name: Upload to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "v${{ needs.prepare.outputs.version }}" sbom-*.cdx.json --clobber
+
   publish:
     name: Publish
-    needs: [prepare, build, installer]
+    needs: [prepare, build, installer, sbom]
     runs-on: ubuntu-latest
     steps:
       - name: Add checksums and open the release
@@ -349,8 +385,8 @@ jobs:
         run: |
           version="${{ needs.prepare.outputs.version }}"
           mkdir assets && cd assets
-          gh release download "v$version" --pattern 'scrimp-*' --pattern 'Scrimp-*'
-          needed_files="scrimp-windows-x64.exe Scrimp-windows-x64-setup.exe"
+          gh release download "v$version" --pattern 'scrimp-*' --pattern 'Scrimp-*' --pattern 'sbom-*'
+          needed_files="scrimp-windows-x64.exe Scrimp-windows-x64-setup.exe sbom-scrimp.cdx.json sbom-scrimpw.cdx.json sbom-scrimp_shell.cdx.json"
           for needed in $needed_files; do
             if [ ! -s "$needed" ]; then
               echo "::error::v$version has no $needed on it, so it stays a draft. Check the build jobs."
@@ -359,7 +395,7 @@ jobs:
           done
           # install.ps1 and `scrimp update` refuse a download that does not
           # match this file, so it goes up before the release is opened.
-          sha256sum scrimp-* $(ls Scrimp-* 2>/dev/null) > SHA256SUMS
+          sha256sum scrimp-* $(ls Scrimp-* 2>/dev/null) sbom-* > SHA256SUMS
           cat SHA256SUMS
           gh release upload "v$version" SHA256SUMS --clobber
           if ! gh release edit "v$version" --draft=false --latest; then
