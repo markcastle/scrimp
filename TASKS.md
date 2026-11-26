@@ -77,7 +77,12 @@ Each of these follows [docs/windows-api.md](docs/windows-api.md).
 
 ## Phase 6: Hardening, released as 1.0
 
-- [ ] Everything in the MVP definition of done, [docs/plan.md section 17](docs/plan.md#17-mvp-definition-of-done)
+- [ ] Everything in the MVP definition of done, [docs/plan.md section 17](docs/plan.md#17-mvp-definition-of-done): every item but the two that need Explorer itself, which wait on S6 below
+- [x] CI holds the code that changes files to 95% of lines (`cargo xtask coverage`)
+- [x] CI and releases check every program needs nothing but Windows (`cargo xtask imports`)
+- [x] Honest reporting on mounted VHDX drives
+- [x] Dev Drives called by name
+- [x] An SBOM for each program on every release
 
 ## Tried by a person
 

@@ -36,6 +36,7 @@ enum Group {
     Encrypted,
     Links,
     DriveCantDoIt,
+    DevDrive,
     WofNotRunning,
     Unknown,
     FolderUnreadable,
@@ -96,6 +97,10 @@ impl Group {
                 "1 file is on a drive that can't save space this way.",
                 "{n} files are on a drive that can't save space this way.",
             ),
+            Group::DevDrive => (
+                "1 file is on a Dev Drive. Dev Drives can't save space this way.",
+                "{n} files are on a Dev Drive. Dev Drives can't save space this way.",
+            ),
             Group::WofNotRunning => (
                 "1 file wasn't compressed because Windows' compression driver isn't running on its drive. Choose For Files That Change to use NTFS compression there instead.",
                 "{n} files weren't compressed because Windows' compression driver isn't running on their drive. Choose For Files That Change to use NTFS compression there instead.",
@@ -132,6 +137,7 @@ impl Group {
                 UnsupportedReason::Link => Group::Links,
                 UnsupportedReason::SpecialFile => Group::Unknown,
                 UnsupportedReason::WofNotRunning => Group::WofNotRunning,
+                UnsupportedReason::FileSystem(fs) if crate::state::is_refs(fs) => Group::DevDrive,
                 UnsupportedReason::FileSystem(_)
                 | UnsupportedReason::ClusterTooLarge
                 | UnsupportedReason::NetworkLocation => Group::DriveCantDoIt,
@@ -506,5 +512,27 @@ mod tests {
         assert_eq!(format_count(999), "999");
         assert_eq!(format_count(6000), "6,000");
         assert_eq!(format_count(1_234_567), "1,234,567");
+    }
+
+    #[test]
+    fn dev_drives_are_called_dev_drives() {
+        let mut r = Report::new(Mode::Compress);
+        let on = |fs: &str| Outcome::Skipped(SkipReason::CantCompressHere(UnsupportedReason::FileSystem(fs.into())));
+        r.add(&on("ReFS"), 100);
+        r.add(&on("ReFS"), 100);
+        r.add(&on("exFAT"), 100);
+        let lines = r.summary(None);
+        assert!(
+            lines.contains(&"2 files are on a Dev Drive. Dev Drives can't save space this way.".to_string()),
+            "{lines:?}"
+        );
+        assert!(
+            lines.contains(&"1 file is on a drive that can't save space this way.".to_string()),
+            "{lines:?}"
+        );
+        assert_eq!(
+            UnsupportedReason::FileSystem("ReFS".into()).plain(),
+            "it's on a Dev Drive or another ReFS drive, and those can't save space this way"
+        );
     }
 }

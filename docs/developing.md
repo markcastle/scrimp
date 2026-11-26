@@ -107,6 +107,8 @@ On GitHub, open **Actions**, pick **Release** on the left, press **Run workflow*
 4. Builds `scrimp.exe` for Windows x64, checks it reports the right version, and uploads it to the draft as `scrimp-windows-x64.exe`.
 5. Adds a `SHA256SUMS` file and publishes the release, so "latest" never points at a release with nothing to download.
 
+Alongside the builds, it makes an SBOM for each program, and checks each program needs nothing but Windows (`cargo xtask imports`). A release missing any of its files stays a draft.
+
 Step 4 also builds the installer, `Scrimp-windows-x64-setup.exe`, with `scripts/build-installer.sh`.
 
 Tick **Rehearse** to see steps 1 and 2 in the log without anything being pushed, built or published. It is also the way to ask what number the next release would be.
@@ -145,6 +147,7 @@ Each release carries:
 | --- | --- |
 | `Scrimp-windows-x64-setup.exe` | The installer: the menu, the worker and the command line, per user |
 | `scrimp-windows-x64.exe` | The command line on its own, for `install.ps1` |
+| `sbom-scrimp.cdx.json`, `sbom-scrimpw.cdx.json`, `sbom-scrimp_shell.cdx.json` | Software bills of materials (CycloneDX): every crate in each program, with its version and licence, for answering "is Scrimp affected?" when a crate has a security problem |
 | `SHA256SUMS` | Checking any of the above arrived intact |
 
 ### The installer
