@@ -11,6 +11,7 @@ repository = "https://github.com/markcastle/scrimp"
 
 [workspace.dependencies]
 scrimp-core = { path = "crates/scrimp-core" }
+scrimp-update = { path = "crates/scrimp-update" }
 scrimp-win = { path = "crates/scrimp-win" }
 
 anyhow = "1"
@@ -20,8 +21,13 @@ ctrlc = "3"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Checking downloads in `scrimp update`, as Keevoro does.
+sha2 = "0.11"
 tempfile = "3"
 thiserror = "2"
+# `scrimp update`'s only network client, as Keevoro's: it trusts what
+# Windows trusts, so office proxies with their own certificates work.
+ureq = { version = "3", features = ["platform-verifier"] }
 # The core of Microsoft's bindings, for implementing COM objects (the
 # Explorer menu DLL).
 windows-core = "0.62"

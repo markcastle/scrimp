@@ -70,7 +70,7 @@ Each of these follows [docs/windows-api.md](docs/windows-api.md).
 
 - [ ] Results dialog, Save report, Try Again as Administrator, Scrimp Savings…, first-use message
 - [x] NSIS installer, per user, with `--register --add-to-path` and `--unregister`, tested install, reinstall and uninstall in CI
-- [ ] `scrimp update`
+- [x] `scrimp update`, adapted from `keevoro-update`: hands over to the installer, or swaps `scrimp.exe` for a command-line-only install
 
 ## Phase 6: Hardening, released as 1.0
 

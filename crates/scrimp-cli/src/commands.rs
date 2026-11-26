@@ -14,7 +14,7 @@ use scrimp_core::{
 use scrimp_win::WindowsDisk;
 use serde_json::json;
 
-use crate::cli::{Change, Cli, Command, Look, exit};
+use crate::cli::{Change, Cli, Command, Look, Update, exit};
 use crate::{json, words};
 
 pub fn run(cli: Cli) -> i32 {
@@ -30,6 +30,68 @@ pub fn run(cli: Cli) -> i32 {
         Command::Decompress(c) => change(&settings, &c, Target::Uncompressed),
         Command::Inspect(look) => inspect(&look),
         Command::Analyse(look) => analyse(&settings, &look),
+        Command::Update(u) => update(&u),
+    }
+}
+
+/// `update`: the newest release, checked, put in place the way this copy
+/// was installed.
+fn update(args: &Update) -> i32 {
+    use scrimp_update::{Check, GitHub, Installed, check, clean_up, download, replace_program, start_installer};
+    let current = env!("CARGO_PKG_VERSION");
+    let Ok(exe) = std::env::current_exe() else {
+        eprintln!("Couldn't tell where Scrimp is installed.");
+        return exit::FATAL;
+    };
+    clean_up(&exe);
+    println!("Checking for a newer Scrimp…");
+    let web = GitHub::from_env();
+    let release = match check(&web, current) {
+        Ok(Check::UpToDate) => {
+            println!("Scrimp {current} is the newest version.");
+            return exit::OK;
+        }
+        Ok(Check::Available(release)) => release,
+        Err(e) => {
+            eprintln!("{e}.");
+            return exit::SOME_FAILED;
+        }
+    };
+    println!("Scrimp {} is available. What's new: {}", release.version, release.page);
+    if args.check {
+        return exit::OK;
+    }
+    let installed = Installed::of(&exe);
+    let file = match download(&web, &release, installed.file()) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            eprintln!("{e}.");
+            return exit::SOME_FAILED;
+        }
+    };
+    let done = match &installed {
+        Installed::ByInstaller(folder) => start_installer(&file, folder).map(|()| {
+            format!(
+                "Installing Scrimp {}. The installer carries on by itself once this command has finished.",
+                release.version
+            )
+        }),
+        Installed::CommandLineOnly(exe) => replace_program(exe, &file).map(|()| {
+            format!(
+                "Scrimp {} is installed. New terminal windows will use it.",
+                release.version
+            )
+        }),
+    };
+    match done {
+        Ok(message) => {
+            println!("{message}");
+            exit::OK
+        }
+        Err(e) => {
+            eprintln!("{e}.");
+            exit::SOME_FAILED
+        }
     }
 }
 

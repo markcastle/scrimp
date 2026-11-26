@@ -10,6 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 - **Scrimp in Explorer's right-click menu.** Right-click a file, a folder or a drive and choose **Scrimp Compress** or **Scrimp Decompress**. A single file shows only the one that makes sense, and drives that can't save space this way (USB sticks, network locations, Dev Drives) show neither. Hold Shift to choose how to compress: Automatic, Faster to Open, Smallest, or For Files That Change. On Windows 11, Scrimp is under **Show more options**.
 - **A progress window while Scrimp works**, showing the files done and the space saved so far, with Cancel, which stops after the file in progress. At the end, a summary of what was saved and why any files were left alone.
+- **`scrimp update`** installs the newest release, checking the download first. `scrimp update --check` only says whether there is one. Scrimp never checks by itself.
 - **An installer**, `Scrimp-windows-x64-setup.exe`. It needs no administrator, adds the menu and the `scrimp` command, and appears in Installed apps, where Scrimp can be removed again. Removing it leaves files Scrimp compressed working as normal.
 
 ## [0.1.0] - 2026-11-26

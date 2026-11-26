@@ -32,6 +32,15 @@ pub enum Command {
     /// Show how much space files and folders take, and what compressing them would do.
     #[command(alias = "analyze")]
     Analyse(Look),
+    /// Update Scrimp to the newest release. Only ever contacts GitHub when you run it.
+    Update(Update),
+}
+
+#[derive(Debug, Args)]
+pub struct Update {
+    /// Only say whether a newer version is available; change nothing.
+    #[arg(long)]
+    pub check: bool,
 }
 
 #[derive(Debug, Args)]
