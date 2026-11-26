@@ -71,7 +71,7 @@ Each of these follows [docs/windows-api.md](docs/windows-api.md).
 - [x] Results dialog with Try Again as Administrator: only the refused files, in their own jobs folder and worker, which lists them and asks before starting
 - [x] First-use message, once, before the first compress
 - [x] Scrimp Savings… in the Shift menu, from the same analysis as `scrimp analyse`
-- [ ] Save report
+- [x] Save Report…: a CSV row per file, written as the job runs, saved with Windows' own Save dialog
 - [x] NSIS installer, per user, with `--register --add-to-path` and `--unregister`, tested install, reinstall and uninstall in CI
 - [x] `scrimp update`, adapted from `keevoro-update`: hands over to the installer, or swaps `scrimp.exe` for a command-line-only install
 
@@ -92,6 +92,7 @@ Things CI can't prove. Tick them when someone has tried them on a real PC.
 - [ ] S6: Shift + right-click shows Automatic, Faster to Open, Smallest and For Files That Change under Scrimp Compress, then Scrimp Savings…, which isn't there without Shift
 - [ ] S6: a compressed file shows only Scrimp Decompress, and a USB stick (exFAT) shows neither
 - [ ] Try Again as Administrator: the shield shows on the button, saying no to Windows' prompt changes nothing, and saying yes lists the files and then changes only them
+- [ ] Save Report… opens Windows' Save dialog in Documents, and the CSV opens in Excel with names such as 写真.jpg intact
 - [ ] The first-use message shows once, before the first Scrimp Compress, and never again
 - [ ] The worker's progress and summary dialogs look right at 100%, 150% and 200% scaling, in light and dark mode
 

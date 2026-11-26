@@ -14,6 +14,7 @@ mod job;
 mod outcome;
 mod policy;
 mod report;
+mod saved_report;
 mod settings;
 pub mod shell_ids;
 mod space;
@@ -31,6 +32,7 @@ pub use job::{
 pub use outcome::{FailReason, Outcome, Sizes, SkipReason};
 pub use policy::{ChangesOften, Choice, Plan, Policy};
 pub use report::{Mode, Report, format_count, format_size};
+pub use saved_report::{CSV_HEADER, csv_folder_row, csv_row};
 pub use settings::{SCHEMA_VERSION, Settings, SettingsError};
 pub use space::{Shortfall, check_room, growth, reserve};
 pub use state::{CompressionState, UnsupportedReason};

@@ -256,6 +256,52 @@ pub fn message(title: &str, headline: &str, body: &str, details: Option<&str>) {
     ask(title, headline, body, details, &[], Finish::Close);
 }
 
+/// Windows' own Save dialog, for a CSV file first named `name`. Returns
+/// where the person chose, or `None` if they cancelled.
+pub fn save_csv(title: &str, name: &str) -> Option<std::path::PathBuf> {
+    use windows::Win32::System::Com::{
+        CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemFree,
+    };
+    use windows::Win32::UI::Shell::Common::COMDLG_FILTERSPEC;
+    use windows::Win32::UI::Shell::{FOS_OVERWRITEPROMPT, FileSaveDialog, IFileSaveDialog, SIGDN_FILESYSPATH};
+
+    let (title, name) = (wide(title), wide(name));
+    let (kind, pattern, extension) = (wide("CSV file (opens in Excel)"), wide("*.csv"), wide("csv"));
+    // SAFETY: joins this thread to COM as a dialog's thread must be; doing
+    // so again is harmless.
+    let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+    // SAFETY: creates Windows' own Save dialog object.
+    let dialog: IFileSaveDialog = unsafe { CoCreateInstance(&FileSaveDialog, None, CLSCTX_INPROC_SERVER) }.ok()?;
+    let types = [COMDLG_FILTERSPEC {
+        pszName: PCWSTR(kind.as_ptr()),
+        pszSpec: PCWSTR(pattern.as_ptr()),
+    }];
+    // SAFETY: every string passed lives until the dialog is done with it,
+    // which is before this function returns.
+    unsafe {
+        dialog.SetFileTypes(&types).ok()?;
+        dialog.SetDefaultExtension(PCWSTR(extension.as_ptr())).ok()?;
+        dialog.SetFileName(PCWSTR(name.as_ptr())).ok()?;
+        dialog.SetTitle(PCWSTR(title.as_ptr())).ok()?;
+        let options = dialog.GetOptions().ok()?;
+        dialog.SetOptions(options | FOS_OVERWRITEPROMPT).ok()?;
+    }
+    // SAFETY: shows the dialog with no owner window; Cancel comes back as an error.
+    unsafe { dialog.Show(None) }.ok()?;
+    // SAFETY: the dialog was accepted, so it has a result.
+    let chosen = unsafe {
+        dialog
+            .GetResult()
+            .and_then(|item| item.GetDisplayName(SIGDN_FILESYSPATH))
+    }
+    .ok()?;
+    // SAFETY: `chosen` is a NUL-terminated string the shell allocated.
+    let path = unsafe { chosen.to_string() };
+    // SAFETY: frees that string, once.
+    unsafe { CoTaskMemFree(Some(chosen.0.cast())) };
+    path.ok().map(std::path::PathBuf::from)
+}
+
 #[cfg(test)]
 mod tests {
     //! The dialogs shown for real and pressed through Windows' own
@@ -263,7 +309,7 @@ mod tests {
 
     use super::*;
     use std::time::{Duration, Instant};
-    use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, PostMessageW, WM_CLOSE};
+    use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, PostMessageW, WM_CLOSE, WM_COMMAND};
 
     /// Waits for the dialog titled `title`, then sends it `press`.
     /// Dialogs are shown one at a time, as a person would see them: opened
@@ -342,6 +388,32 @@ mod tests {
         let pressed = ask("Scrimp ui test: cancel", "Headline", "", None, &[], Finish::Cancel);
         presser.join().unwrap();
         assert_eq!(pressed, None);
+    }
+
+    #[test]
+    fn the_save_dialog_gives_the_place_chosen_or_nothing() {
+        let _one = one_at_a_time();
+        let presser = press_when_shown("Scrimp ui test: save cancel", |hwnd| {
+            // SAFETY: as in `click`.
+            let _ = unsafe { PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0)) };
+        });
+        assert_eq!(
+            save_csv("Scrimp ui test: save cancel", "Scrimp report - Games.csv"),
+            None
+        );
+        assert!(presser.join().unwrap(), "the dialog was never shown");
+
+        // Accepting the name offered, as pressing Enter does.
+        let name = format!("Scrimp ui test {}.csv", std::process::id());
+        let presser = press_when_shown("Scrimp ui test: save", |hwnd| {
+            // SAFETY: as in `click`; 1 is the dialog's OK.
+            let _ = unsafe { PostMessageW(Some(hwnd), WM_COMMAND, WPARAM(1), LPARAM(0)) };
+        });
+        let chosen = save_csv("Scrimp ui test: save", &name);
+        assert!(presser.join().unwrap(), "the dialog was never shown");
+        let chosen = chosen.expect("a place was chosen");
+        assert_eq!(chosen.file_name().unwrap().to_string_lossy(), name);
+        assert!(!chosen.exists(), "the dialog only chooses; Scrimp writes");
     }
 
     #[test]

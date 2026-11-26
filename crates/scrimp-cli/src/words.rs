@@ -54,21 +54,6 @@ pub fn fail_name(reason: &FailReason) -> &'static str {
     }
 }
 
-fn why_unsupported(reason: &UnsupportedReason) -> String {
-    match reason {
-        UnsupportedReason::FileSystem(fs) => format!("it's on a {fs} drive, which can't save space this way"),
-        UnsupportedReason::ClusterTooLarge => "its drive can't use NTFS compression".into(),
-        UnsupportedReason::NetworkLocation => "it's on a network location".into(),
-        UnsupportedReason::Encrypted => "it's encrypted".into(),
-        UnsupportedReason::CloudPlaceholder => "it's a cloud file, and compressing it could download it".into(),
-        UnsupportedReason::Link => "it's a link, and Scrimp never follows links".into(),
-        UnsupportedReason::SpecialFile => "it's a special file Windows manages itself".into(),
-        UnsupportedReason::WofNotRunning => {
-            "Windows' compression driver isn't running on its drive (NTFS compression still works there)".into()
-        }
-    }
-}
-
 /// A line to show for a file whose outcome needs attention, or `None` for
 /// the ordinary outcomes the summary covers.
 pub fn attention(path: &Path, outcome: &Outcome) -> Option<String> {
@@ -98,7 +83,7 @@ pub fn describe(path: &Path, state: &CompressionState, logical: u64, on_disk: u6
         }
         CompressionState::WimBacked => format!("{p}: a Windows system file. Scrimp leaves it alone. {size}."),
         CompressionState::Unsupported(reason) => {
-            format!("{p}: left alone, because {}. {size}.", why_unsupported(reason))
+            format!("{p}: left alone, because {}. {size}.", reason.plain())
         }
         CompressionState::Unknown => {
             format!("{p}: Scrimp can't tell how this file is stored, so leaves it alone. {size}.")
@@ -150,7 +135,7 @@ mod tests {
             UnsupportedReason::WofNotRunning,
         ];
         for r in &unsupported {
-            assert!(!why_unsupported(r).is_empty());
+            assert!(!r.plain().is_empty());
             assert_eq!(skip_name(&SkipReason::CantCompressHere(r.clone())), unsupported_name(r));
         }
         for r in [
