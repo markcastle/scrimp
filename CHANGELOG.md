@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
-- **Scrimp in Explorer's right-click menu.** Right-click a file, a folder or a drive and choose **Scrimp Compress** or **Scrimp Decompress**. A single file shows only the one that makes sense, and drives that can't save space this way (USB sticks, network locations, Dev Drives) show neither. Hold Shift to choose how to compress: Automatic, Faster to Open, Smallest, or For Files That Change. On Windows 11, Scrimp is under **Show more options**.
+- **Scrimp in Explorer's right-click menu.** Right-click a file, a folder or a drive and choose **Scrimp Compress** or **Scrimp Decompress**. A single file shows only the one that makes sense, and drives that can't save space this way (USB sticks, network locations, Dev Drives) show neither. Hold Shift to choose how to compress: Automatic, Faster to Open, Smallest, or For Files That Change. Shift also shows **Scrimp Savings…**, which says how much space the selection takes, how much compression saves already and what compressing it would do, changing nothing. On Windows 11, Scrimp is under **Show more options**.
 - **A progress window while Scrimp works**, showing the files done and the space saved so far, with Cancel, which stops after the file in progress. At the end, a summary of what was saved and why any files were left alone.
 - **Try Again as Administrator.** When Windows doesn't allow changes to some files, the summary offers to try just those again as administrator. Windows asks first, and Scrimp then lists exactly what it will change before it starts.
 - **A short note the first time you compress**, saying your files stay exactly as they are and how to undo it.

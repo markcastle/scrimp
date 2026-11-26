@@ -70,7 +70,7 @@ Each of these follows [docs/windows-api.md](docs/windows-api.md).
 
 - [x] Results dialog with Try Again as Administrator: only the refused files, in their own jobs folder and worker, which lists them and asks before starting
 - [x] First-use message, once, before the first compress
-- [ ] Scrimp Savings… in the Shift menu
+- [x] Scrimp Savings… in the Shift menu, from the same analysis as `scrimp analyse`
 - [ ] Save report
 - [x] NSIS installer, per user, with `--register --add-to-path` and `--unregister`, tested install, reinstall and uninstall in CI
 - [x] `scrimp update`, adapted from `keevoro-update`: hands over to the installer, or swaps `scrimp.exe` for a command-line-only install
@@ -89,7 +89,7 @@ Things CI can't prove. Tick them when someone has tried them on a real PC.
 - [ ] How fast is LZX on a typical desktop, against the runner's 10 MiB per second?
 
 - [ ] S6: Scrimp Compress and Scrimp Decompress appear on Windows 10 and under Windows 11's Show more options after `scrimpw --register`, for a file, a folder, a drive and 20 selected files
-- [ ] S6: Shift + right-click shows Automatic, Faster to Open, Smallest and For Files That Change under Scrimp Compress
+- [ ] S6: Shift + right-click shows Automatic, Faster to Open, Smallest and For Files That Change under Scrimp Compress, then Scrimp Savings…, which isn't there without Shift
 - [ ] S6: a compressed file shows only Scrimp Decompress, and a USB stick (exFAT) shows neither
 - [ ] Try Again as Administrator: the shield shows on the button, saying no to Windows' prompt changes nothing, and saying yes lists the files and then changes only them
 - [ ] The first-use message shows once, before the first Scrimp Compress, and never again

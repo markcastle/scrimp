@@ -5,8 +5,8 @@ use std::process::ExitCode;
 use std::sync::{Mutex, PoisonError};
 
 use scrimp_core::{
-    Control, Event, FailReason, Job, JobError, JobRequest, Mode, Outcome, Report, Settings, Target, admin_jobs_folder,
-    format_count, format_size, has_waiting, jobs_folder, take_next, worker_lock_name,
+    Action, Control, Event, FailReason, Job, JobError, JobRequest, Mode, Outcome, Report, Settings, Target,
+    admin_jobs_folder, format_count, format_size, has_waiting, jobs_folder, take_next, worker_lock_name,
 };
 use scrimp_win::ui::{self, Button, Finish, ProgressView};
 
@@ -262,7 +262,11 @@ pub(crate) fn run_on(job: Result<JobRequest, JobError>, screen: &dyn Screen, pla
         None => Settings::default(),
     };
     let name = name_of(&request.paths);
-    let decompressing = request.target == Target::Uncompressed;
+    let target = match request.action {
+        Action::Change(target) => target,
+        Action::Savings => return show_savings(screen, &settings, &request.paths, &name),
+    };
+    let decompressing = target == Target::Uncompressed;
     let doing = if decompressing { "Decompressing" } else { "Compressing" };
     let headline = format!("{doing} {name}");
     let elevated = screen.elevated();
@@ -276,7 +280,6 @@ pub(crate) fn run_on(job: Result<JobRequest, JobError>, screen: &dyn Screen, pla
         }
     }
 
-    let target = request.target;
     let control = Control::new();
     let live = Mutex::new(Live::new(if decompressing {
         Mode::Decompress
@@ -285,7 +288,7 @@ pub(crate) fn run_on(job: Result<JobRequest, JobError>, screen: &dyn Screen, pla
     }));
     let job = Job {
         paths: request.paths,
-        target: request.target,
+        target,
     };
     let policy = settings.policy();
 
@@ -332,6 +335,70 @@ pub(crate) fn run_on(job: Result<JobRequest, JobError>, screen: &dyn Screen, pla
     if screen.ask(&lines[0], &body.join("\n"), details.as_deref(), buttons, Finish::Close) == Some(0) && offer {
         try_again_as_administrator(screen, places.admin_jobs.as_deref(), target, state.denied);
     }
+}
+
+/// **Scrimp Savings…**: looks at the selection, changing nothing, then says
+/// what it takes up, what's saved already and what compressing would do.
+/// Nothing changes, so there's no first-use message and nothing to confirm.
+fn show_savings(screen: &dyn Screen, settings: &Settings, paths: &[PathBuf], name: &str) {
+    let control = Control::new();
+    let looked = Mutex::new((0u64, false));
+    let analysis = std::thread::scope(|scope| {
+        let work = scope.spawn(|| {
+            let analysis = scrimp_core::analyse(
+                paths,
+                &settings.policy(),
+                &settings.workers,
+                &WindowsDisk,
+                &control,
+                |e| {
+                    if matches!(e, Event::File { .. }) {
+                        looked.lock().unwrap_or_else(PoisonError::into_inner).0 += 1;
+                    }
+                },
+            );
+            looked.lock().unwrap_or_else(PoisonError::into_inner).1 = true;
+            analysis
+        });
+        let headline = format!("Looking at {name}");
+        let mut poll = || {
+            let (files, finished) = *looked.lock().unwrap_or_else(PoisonError::into_inner);
+            ProgressView {
+                headline: headline.clone(),
+                detail: if files == 1 {
+                    "1 file looked at.".into()
+                } else {
+                    format!("{} files looked at.", format_count(files))
+                },
+                finished,
+            }
+        };
+        let mut cancel = || control.cancel();
+        screen.progress(&headline, &mut poll, &mut cancel);
+        work.join()
+    });
+    let Ok(analysis) = analysis else {
+        screen.ask(
+            "Something went wrong",
+            "Scrimp stopped unexpectedly. Nothing was changed.",
+            None,
+            &[],
+            Finish::Close,
+        );
+        return;
+    };
+    if control.is_cancelled() {
+        return;
+    }
+    let (headline, body) = analysis.savings(name);
+    let details = analysis.details();
+    screen.ask(
+        &headline,
+        &body.join("\n"),
+        (!details.is_empty()).then_some(details.as_str()),
+        &[],
+        Finish::Close,
+    );
 }
 
 /// The first time Scrimp compresses anything for this person, says what it
@@ -415,7 +482,12 @@ fn try_again_as_administrator(screen: &dyn Screen, folder: Option<&Path>, target
     let (Some(folder), Ok(exe)) = (folder, std::env::current_exe()) else {
         return failed("Windows didn't say where Scrimp is");
     };
-    let job = match (JobRequest { target, paths }).write_to(folder) {
+    let job = match (JobRequest {
+        action: Action::Change(target),
+        paths,
+    })
+    .write_to(folder)
+    {
         Ok(job) => job,
         Err(e) => return failed(&e.to_string()),
     };
@@ -698,7 +770,7 @@ mod tests {
 
     fn compress(folder: &Path) -> Result<JobRequest, JobError> {
         Ok(JobRequest {
-            target: Target::Automatic,
+            action: Action::Change(Target::Automatic),
             paths: vec![folder.to_path_buf()],
         })
     }
@@ -736,7 +808,7 @@ mod tests {
         let screen = Scripted::new(&[None]);
         run_on(
             Ok(JobRequest {
-                target: Target::Uncompressed,
+                action: Action::Change(Target::Uncompressed),
                 paths: vec![folder.clone()],
             }),
             &screen,
@@ -826,5 +898,33 @@ mod tests {
         let screen = Scripted::new(&[]);
         try_again_as_administrator(&screen, None, Target::Automatic, refused);
         assert_eq!(screen.headlines(), ["Scrimp couldn't start as administrator"]);
+    }
+
+    #[test]
+    fn savings_say_what_the_selection_takes_and_change_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let (folder, file) = a_folder_to_compress(dir.path());
+        let screen = Scripted::new(&[]);
+        let savings = || {
+            Ok(JobRequest {
+                action: Action::Savings,
+                paths: vec![folder.clone()],
+            })
+        };
+        run_on(savings(), &screen, &places(dir.path()), false);
+        let asked = screen.asked.lock().unwrap().clone();
+        assert_eq!(asked.len(), 1, "no first-use message for looking: {asked:?}");
+        assert_eq!(asked[0].0, "Games isn't compressed");
+        assert!(asked[0].1.contains("Scrimp would compress 1 file"), "{}", asked[0].1);
+        assert!(!is_compressed(&file));
+
+        scrimp_win::compress(&file, scrimp_core::Algorithm::Lzx).unwrap();
+        let screen = Scripted::new(&[]);
+        run_on(savings(), &screen, &places(dir.path()), true);
+        let headline = screen.headlines()[0].clone();
+        assert!(
+            headline.starts_with("Compression saves ") && headline.ends_with(" in Games"),
+            "{headline}"
+        );
     }
 }

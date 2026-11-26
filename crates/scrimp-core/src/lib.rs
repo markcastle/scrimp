@@ -21,10 +21,12 @@ mod state;
 
 pub use algorithm::{Algorithm, ParseError, Target};
 pub use engine::{
-    Control, Disk, DiskError, EntryKind, Event, FileFacts, FileId, Job, Storage, VolumeFacts, Workers, run,
+    Analysis, Control, Disk, DiskError, EntryKind, Event, FileFacts, FileId, Group, Job, Preview, StateGroup, Storage,
+    VolumeFacts, Workers, analyse, run,
 };
 pub use job::{
-    JOB_SCHEMA_VERSION, JobError, JobRequest, admin_jobs_folder, has_waiting, jobs_folder, take_next, worker_lock_name,
+    Action, JOB_SCHEMA_VERSION, JobError, JobRequest, admin_jobs_folder, has_waiting, jobs_folder, take_next,
+    worker_lock_name,
 };
 pub use outcome::{FailReason, Outcome, Sizes, SkipReason};
 pub use policy::{ChangesOften, Choice, Plan, Policy};

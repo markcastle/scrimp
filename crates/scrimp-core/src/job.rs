@@ -31,8 +31,18 @@ const CLAIMED: &str = "running";
 /// What one right-click asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobRequest {
-    pub target: Target,
+    pub action: Action,
     pub paths: Vec<PathBuf>,
+}
+
+/// What to do with a job's paths.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    /// Compress or decompress: Scrimp Compress, its Shift choices, and
+    /// Scrimp Decompress.
+    Change(Target),
+    /// Look and report, changing nothing: Scrimp Savings….
+    Savings,
 }
 
 /// Why a job file was refused.
@@ -43,10 +53,11 @@ pub struct JobError(String);
 impl JobRequest {
     /// The file's contents.
     pub fn to_json(&self) -> String {
-        let (operation, method) = match self.target {
-            Target::Uncompressed => ("decompress", None),
-            Target::Automatic => ("compress", Some("auto")),
-            Target::Algorithm(a) => ("compress", Some(a.cli_name())),
+        let (operation, method) = match self.action {
+            Action::Change(Target::Uncompressed) => ("decompress", None),
+            Action::Change(Target::Automatic) => ("compress", Some("auto")),
+            Action::Change(Target::Algorithm(a)) => ("compress", Some(a.cli_name())),
+            Action::Savings => ("savings", None),
         };
         let paths: Vec<String> = self.paths.iter().map(|p| p.to_string_lossy().into_owned()).collect();
         let mut v = json!({ "schemaVersion": JOB_SCHEMA_VERSION, "operation": operation, "paths": paths });
@@ -62,11 +73,13 @@ impl JobRequest {
         if v["schemaVersion"].as_u64() != Some(u64::from(JOB_SCHEMA_VERSION)) {
             return Err(JobError("it was written by a different version of Scrimp.".into()));
         }
-        let target = match (v["operation"].as_str(), v["method"].as_str()) {
-            (Some("decompress"), _) => Target::Uncompressed,
-            (Some("compress"), Some(m)) => m
-                .parse::<Target>()
-                .map_err(|_| JobError(format!("\"{m}\" isn't a compression method.")))?,
+        let action = match (v["operation"].as_str(), v["method"].as_str()) {
+            (Some("decompress"), _) => Action::Change(Target::Uncompressed),
+            (Some("savings"), _) => Action::Savings,
+            (Some("compress"), Some(m)) => Action::Change(
+                m.parse::<Target>()
+                    .map_err(|_| JobError(format!("\"{m}\" isn't a compression method.")))?,
+            ),
             _ => return Err(JobError("it doesn't say what to do.".into())),
         };
         let paths: Vec<PathBuf> = v["paths"]
@@ -88,7 +101,7 @@ impl JobRequest {
                 bad.display()
             )));
         }
-        Ok(JobRequest { target, paths })
+        Ok(JobRequest { action, paths })
     }
 
     /// Writes the job into `folder` under a new name, never replacing
@@ -222,7 +235,7 @@ mod tests {
 
     fn job(target: Target, paths: &[&str]) -> JobRequest {
         JobRequest {
-            target,
+            action: Action::Change(target),
             paths: paths.iter().map(PathBuf::from).collect(),
         }
     }
@@ -244,6 +257,12 @@ mod tests {
             );
             assert_eq!(JobRequest::from_json(&j.to_json()), Ok(j));
         }
+        let savings = JobRequest {
+            action: Action::Savings,
+            paths: vec![PathBuf::from(r"D:\Games")],
+        };
+        assert!(savings.to_json().contains(r#""operation":"savings""#));
+        assert_eq!(JobRequest::from_json(&savings.to_json()), Ok(savings));
     }
 
     #[test]
@@ -338,7 +357,7 @@ mod tests {
         let (_, taken) = take_next(dir.path()).unwrap();
         assert!(taken.is_err(), "the broken job is reported");
         let (_, taken) = take_next(dir.path()).unwrap();
-        assert_eq!(taken.unwrap().target, Target::Uncompressed);
+        assert_eq!(taken.unwrap().action, Action::Change(Target::Uncompressed));
         assert!(take_next(dir.path()).is_none());
         let left: Vec<_> = std::fs::read_dir(dir.path())
             .unwrap()

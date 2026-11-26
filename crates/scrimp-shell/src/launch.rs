@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use scrimp_core::{JobRequest, Target};
+use scrimp_core::{Action, JobRequest};
 use windows::Win32::Foundation::HMODULE;
 use windows::Win32::System::LibraryLoader::{
     GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, GetModuleFileNameW,
@@ -47,8 +47,8 @@ pub(crate) fn worker_beside(dll: &Path) -> Option<PathBuf> {
 
 /// Writes the job and starts the worker on it. The worker is left running
 /// on its own; Explorer doesn't wait for it.
-pub(crate) fn submit(paths: Vec<PathBuf>, target: Target, jobs: &Path, worker: &Path) -> std::io::Result<PathBuf> {
-    let job = JobRequest { target, paths }.write_to(jobs)?;
+pub(crate) fn submit(paths: Vec<PathBuf>, action: Action, jobs: &Path, worker: &Path) -> std::io::Result<PathBuf> {
+    let job = JobRequest { action, paths }.write_to(jobs)?;
     std::process::Command::new(worker).arg("--job").arg(&job).spawn()?;
     Ok(job)
 }
@@ -81,12 +81,26 @@ mod tests {
         let jobs = dir.path().join("jobs");
         // Something that starts and exits at once stands in for the worker.
         let worker = PathBuf::from(std::env::var_os("SystemRoot").unwrap()).join(r"System32\where.exe");
-        let job = submit(vec![PathBuf::from(r"D:\Games")], Target::Automatic, &jobs, &worker).unwrap();
+        let job = submit(
+            vec![PathBuf::from(r"D:\Games")],
+            Action::Change(scrimp_core::Target::Automatic),
+            &jobs,
+            &worker,
+        )
+        .unwrap();
         let read = JobRequest::from_json(&std::fs::read_to_string(job).unwrap()).unwrap();
         assert_eq!(read.paths, [PathBuf::from(r"D:\Games")]);
 
         let missing = dir.path().join("scrimpw.exe");
-        assert!(submit(vec![PathBuf::from(r"D:\Games")], Target::Automatic, &jobs, &missing).is_err());
+        assert!(
+            submit(
+                vec![PathBuf::from(r"D:\Games")],
+                Action::Change(scrimp_core::Target::Automatic),
+                &jobs,
+                &missing
+            )
+            .is_err()
+        );
     }
 
     #[test]

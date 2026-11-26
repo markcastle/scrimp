@@ -8,7 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use scrimp_core::{Algorithm, CompressionState, JobRequest, Target, has_waiting, worker_lock_name};
+use scrimp_core::{Action, Algorithm, CompressionState, JobRequest, Target, has_waiting, worker_lock_name};
 use scrimp_win::{SingleInstance, inspect};
 
 fn text(len: usize) -> Vec<u8> {
@@ -40,7 +40,7 @@ fn folder_of_text(root: &Path, name: &str) -> PathBuf {
 
 fn submit(jobs: &Path, target: Target, path: &Path) {
     JobRequest {
-        target,
+        action: Action::Change(target),
         paths: vec![path.to_path_buf()],
     }
     .write_to(jobs)

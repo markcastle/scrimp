@@ -19,7 +19,7 @@
 
 use std::path::Path;
 
-use scrimp_core::shell_ids::{COMPRESS_COMMAND, DECOMPRESS_COMMAND, braced};
+use scrimp_core::shell_ids::{COMPRESS_COMMAND, DECOMPRESS_COMMAND, SAVINGS_COMMAND, braced};
 use windows::Win32::UI::Shell::{SHCNE_ASSOCCHANGED, SHCNF_IDLIST, SHChangeNotify};
 
 use crate::error::Error;
@@ -30,10 +30,13 @@ pub const CLASSES: &str = r"Software\Classes";
 
 const ITEM_TYPES: [&str; 3] = ["*", "Directory", "Drive"];
 
-/// The two menu entries: verb name, title, class ID.
-const ENTRIES: [(&str, &str, u128); 2] = [
+/// The menu entries: verb name, title, class ID. Explorer lists them in
+/// the order of their verb names. Scrimp Savings… only shows with Shift
+/// held; the menu DLL decides that.
+const ENTRIES: [(&str, &str, u128); 3] = [
     ("ScrimpCompress", "Scrimp Compress", COMPRESS_COMMAND),
     ("ScrimpDecompress", "Scrimp Decompress", DECOMPRESS_COMMAND),
+    ("ScrimpSavings", "Scrimp Savings", SAVINGS_COMMAND),
 ];
 
 fn set(key: &str, name: Option<&str>, value: &str) -> Result<(), Error> {
@@ -141,6 +144,11 @@ mod tests {
             );
             assert_eq!(get(&verb, Some("NeverDefault")).unwrap().as_deref(), Some(""));
         }
+        let savings = format!(r"{classes}\Directory\shell\ScrimpSavings");
+        assert_eq!(
+            get(&savings, Some("ExplorerCommandHandler")).unwrap(),
+            Some(braced(SAVINGS_COMMAND))
+        );
         // Registering again is harmless.
         register_under(&classes, dll).unwrap();
 
