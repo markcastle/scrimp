@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0] - 2026-11-26
+
 ### Added
 
 - **Scrimp in Explorer's right-click menu.** Right-click a file, a folder or a drive and choose **Scrimp Compress** or **Scrimp Decompress**. A single file shows only the one that makes sense, and drives that can't save space this way (USB sticks, network locations, Dev Drives) show neither. Hold Shift to choose how to compress: Automatic, Faster to Open, Smallest, or For Files That Change. Shift also shows **Scrimp Savings…**, which says how much space the selection takes, how much compression saves already and what compressing it would do, changing nothing. On Windows 11, Scrimp is under **Show more options**.
@@ -26,5 +30,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - **For scripts:** `--json` output, `--dry-run`, `--workers`, and documented exit codes. See [docs/command-line.md](docs/command-line.md).
 - **Settings** in `%LOCALAPPDATA%\Scrimp\settings.json`: the default method, the smallest file worth compressing, what to do with files that change often, and per-extension choices.
 
-[Unreleased]: https://github.com/markcastle/scrimp/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/markcastle/scrimp/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/markcastle/scrimp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/markcastle/scrimp/releases/tag/v0.1.0
