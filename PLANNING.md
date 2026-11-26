@@ -41,6 +41,8 @@ Add a row when a crate is added, with why.
 | Crate | Used by | Why |
 | --- | --- | --- |
 | `clap` | `scrimp-cli` | Argument parsing and `--version` |
+| `ctrlc` | `scrimp-cli` | Ctrl+C cancels a job between files |
+| `serde_json` | `scrimp-cli` | `--json` output |
 | `thiserror` | `scrimp-core` | Typed errors |
 | `serde`, `serde_json` | `scrimp-core` | Reading `settings.json` |
 | `anyhow`, `regex` | `xtask` | Errors and changelog parsing in tooling |

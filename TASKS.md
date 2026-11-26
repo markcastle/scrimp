@@ -53,8 +53,8 @@ Each of these follows [docs/windows-api.md](docs/windows-api.md).
 
 - [x] Settings file: `settings.json` read and validated, feeding the policy and worker limits (`scrimp-core::settings`)
 
-- [ ] `scrimp compress`, `decompress`, `inspect` and `analyse`
-- [ ] `--json` output and documented exit codes
+- [x] `scrimp compress`, `decompress`, `inspect` and `analyse`, with `--dry-run`, `--workers` and Ctrl+C
+- [x] `--json` output and documented exit codes ([docs/command-line.md](docs/command-line.md))
 - [ ] Benchmark against `compact.exe`
 - [ ] A rehearsal run of the Release workflow passes (Actions → Release → tick Rehearse)
 - [ ] First release with the Release button
