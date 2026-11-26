@@ -333,7 +333,7 @@ dependencies = [
 
 [[package]]
 name = "scrimp-cli"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "clap",
  "ctrlc",
@@ -345,7 +345,7 @@ dependencies = [
 
 [[package]]
 name = "scrimp-core"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -355,7 +355,7 @@ dependencies = [
 
 [[package]]
 name = "scrimp-win"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "scrimp-core",
  "tempfile",
@@ -600,7 +600,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "regex",
