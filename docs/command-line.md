@@ -122,7 +122,7 @@ With `--json`, every line is one JSON object with a `schemaVersion` (now `1`) an
 
 In a dry run, `compressed` and `decompressed` become `wouldCompress` and `wouldDecompress` with no `afterBytes`, and the summary has `wouldChangeFiles` and `wouldChangeBytes` instead of `afterBytes` and `savedBytes`.
 
-Other lines: `folderUnreadable` (`path`, `reason`) and `wofUnavailable` (`drive`), sent once when Windows' compression driver isn't running on a drive.
+Other lines: `folderUnreadable` (`path`, `reason`); `wofUnavailable` (`drive`), sent once when Windows' compression driver isn't running on a drive; and `virtualDisk` (`drive`), sent once when a drive is a mounted VHD or VHDX, whose file only gets smaller on its own drive once it's compacted.
 
 `inspect` writes a `file` line per path with `state`, `logicalBytes` and `onDiskBytes` (and `reason` when the state is `unsupported`), or an `error` line. `analyse` writes one `analysis` line with totals, `byState`, `wouldCompress` and `lines`.
 

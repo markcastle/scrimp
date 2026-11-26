@@ -672,6 +672,8 @@ impl Live {
                 "Windows' compression driver isn't running on {}. Choose For Files That Change to use NTFS compression there.",
                 root.display()
             )),
+            // The summary says what this means for the VHDX file.
+            Event::VirtualDisk { .. } => {}
         }
     }
 

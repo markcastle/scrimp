@@ -152,7 +152,7 @@ impl Tally {
                 }
             }
             Event::FolderUnreadable { .. } => self.failed += 1,
-            Event::WofUnavailable { .. } => {}
+            Event::WofUnavailable { .. } | Event::VirtualDisk { .. } => {}
         }
     }
 
@@ -205,6 +205,8 @@ fn change(settings: &Settings, args: &Change, target: Target) -> i32 {
                 "Windows' compression driver isn't running on {}. Use --algorithm ntfs to compress files there.",
                 root.display()
             )),
+            // The summary says what this means for the VHDX file.
+            Event::VirtualDisk { .. } => None,
         };
         if let Some(m) = message {
             progress.clear();

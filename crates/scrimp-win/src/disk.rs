@@ -86,6 +86,7 @@ impl Disk for WindowsDisk {
             root: v.root,
             storage,
             size: v.size,
+            virtual_disk: v.virtual_disk,
         })
     }
 

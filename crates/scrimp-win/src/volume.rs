@@ -47,6 +47,8 @@ pub struct VolumeInfo {
     pub size: u64,
     /// Whether the drive is a spinning disk, if the device says.
     pub spinning: Option<bool>,
+    /// Whether the drive is a disk kept in a file: a mounted VHD or VHDX.
+    pub virtual_disk: bool,
     flags: u32,
 }
 
@@ -90,6 +92,7 @@ pub fn volume(path: &Path) -> Result<VolumeInfo, Error> {
     Ok(VolumeInfo {
         cluster_size: ffi::cluster_size(&root)?,
         spinning: device_of(&root).and_then(|d| ffi::seek_penalty(&d)),
+        virtual_disk: device_of(&root).and_then(|d| ffi::file_backed(&d)).unwrap_or(false),
         free_bytes,
         size,
         root,
@@ -137,6 +140,7 @@ mod tests {
             free_bytes: 0,
             size: 0,
             spinning: None,
+            virtual_disk: false,
             flags,
         }
     }

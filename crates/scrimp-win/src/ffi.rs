@@ -18,7 +18,8 @@ use windows::Win32::Storage::FileSystem::{
 use windows::Win32::System::IO::DeviceIoControl;
 use windows::Win32::System::Ioctl::{
     DEVICE_SEEK_PENALTY_DESCRIPTOR, FSCTL_DELETE_EXTERNAL_BACKING, FSCTL_GET_COMPRESSION, FSCTL_SET_COMPRESSION,
-    IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery, STORAGE_PROPERTY_QUERY, StorageDeviceSeekPenaltyProperty,
+    IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery, STORAGE_DEVICE_DESCRIPTOR, STORAGE_PROPERTY_QUERY,
+    StorageDeviceProperty, StorageDeviceSeekPenaltyProperty,
 };
 use windows::core::{BOOL, PCWSTR};
 
@@ -159,6 +160,43 @@ pub(crate) fn seek_penalty(device: &Path) -> Option<bool> {
     };
     (result.is_ok() && returned as usize >= size_of::<DEVICE_SEEK_PENALTY_DESCRIPTOR>())
         .then_some(answer.IncursSeekPenalty)
+}
+
+/// `BusTypeFileBackedVirtual`: a disk Windows keeps in a file, such as a
+/// mounted VHD or VHDX.
+const BUS_FILE_BACKED_VIRTUAL: i32 = 15;
+
+/// Whether the device behind a drive is a disk kept in a file (a mounted
+/// VHD or VHDX). `device` is a path such as `\\.\D:`. `None` when the
+/// device doesn't say.
+pub(crate) fn file_backed(device: &Path) -> Option<bool> {
+    let handle = Handle::open(device, Access::Query).ok()?;
+    let query = STORAGE_PROPERTY_QUERY {
+        PropertyId: StorageDeviceProperty,
+        QueryType: PropertyStandardQuery,
+        AdditionalParameters: [0],
+    };
+    // Only the fixed part of the descriptor is needed; the text after it
+    // (vendor, product) is cut off, which Windows allows.
+    let mut answer = STORAGE_DEVICE_DESCRIPTOR::default();
+    let mut returned = 0u32;
+    // SAFETY: the handle is open; `query` and `answer` are live, correctly
+    // sized structures whose sizes are passed with them; the call is
+    // synchronous.
+    let result = unsafe {
+        DeviceIoControl(
+            handle.0,
+            IOCTL_STORAGE_QUERY_PROPERTY,
+            Some((&query as *const STORAGE_PROPERTY_QUERY).cast()),
+            size_of::<STORAGE_PROPERTY_QUERY>() as u32,
+            Some((&mut answer as *mut STORAGE_DEVICE_DESCRIPTOR).cast()),
+            size_of::<STORAGE_DEVICE_DESCRIPTOR>() as u32,
+            Some(&mut returned),
+            None,
+        )
+    };
+    (result.is_ok() && returned as usize >= size_of::<STORAGE_DEVICE_DESCRIPTOR>())
+        .then_some(answer.BusType.0 == BUS_FILE_BACKED_VIRTUAL)
 }
 
 /// What WOF says about a file.

@@ -161,6 +161,8 @@ pub struct Report {
     before: u64,
     after: u64,
     groups: std::collections::BTreeMap<Group, u64>,
+    /// Whether any of the selection is on a disk kept in a file.
+    virtual_disk: bool,
 }
 
 impl Report {
@@ -173,6 +175,7 @@ impl Report {
             before: 0,
             after: 0,
             groups: Default::default(),
+            virtual_disk: false,
         }
     }
 
@@ -215,6 +218,12 @@ impl Report {
         self.after += after;
     }
 
+    /// Notes that some of the selection is on a disk kept in a file, such as
+    /// a mounted VHDX, whose file only shrinks once it is compacted.
+    pub fn add_virtual_disk(&mut self) {
+        self.virtual_disk = true;
+    }
+
     /// Adds a folder that couldn't be opened, so its files were never seen.
     pub fn add_unreadable_folder(&mut self) {
         self.count(Group::FolderUnreadable);
@@ -253,6 +262,12 @@ impl Report {
             });
         }
         lines.extend(self.groups.iter().map(|(group, n)| group.sentence(*n)));
+        if self.virtual_disk && self.changed > 0 {
+            lines.push(match self.mode {
+                Mode::Compress => "This is a virtual disk (VHDX). The space is saved inside it, but the VHDX file itself only gets smaller once it's compacted.".into(),
+                Mode::Decompress => "This is a virtual disk (VHDX), so its VHDX file may grow to make room.".into(),
+            });
+        }
         lines
     }
 
