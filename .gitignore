@@ -4,3 +4,4 @@ lcov.info
 Thumbs.db
 .DS_Store
 /installers
+/spikes/*/target

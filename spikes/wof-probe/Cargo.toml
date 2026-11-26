@@ -1,0 +1,22 @@
+[package]
+name = "wof-probe"
+description = "Phase 0 probe: compresses real files on test volumes and reports exactly what Windows does. Throwaway; see docs/windows-api.md."
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+blake3 = { version = "1", features = ["pure"] }
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+] }
+
+# Throwaway Phase 0 probe: its own workspace, so it never touches the
+# product's lints, coverage or dependency rules.
+[workspace]

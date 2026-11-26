@@ -1,0 +1,123 @@
+name: Phase 0 probe
+
+# Runs spikes/wof-probe on a real Windows machine against small test
+# volumes, and posts what Windows did as a comment on the pull request.
+# Findings are written up in docs/windows-api.md. Throwaway: this workflow
+# goes once Phase 0 is answered.
+
+on:
+  pull_request:
+    paths:
+      - 'spikes/**'
+      - '.github/workflows/spikes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: spikes/wof-probe
+
+      - name: Build the probe
+        working-directory: spikes/wof-probe
+        run: cargo build --release
+
+      # Small VHDX files, mounted as drives: NTFS with 4 KB clusters (the
+      # main test volume), NTFS with 64 KB clusters, exFAT and ReFS. Each is
+      # made separately so one that fails doesn't stop the others.
+      - name: Make the test volumes
+        shell: pwsh
+        run: |
+          $base = if (Test-Path 'D:\') { 'D:\vhd' } else { 'C:\vhd' }
+          New-Item -ItemType Directory -Force -Path $base | Out-Null
+          $volumes = @(
+            @{ Name = 'ntfs4k';  Size = 4096; Format = 'fs=ntfs unit=4096';  Letter = 'N' },
+            @{ Name = 'ntfs64k'; Size = 512;  Format = 'fs=ntfs unit=65536'; Letter = 'L' },
+            @{ Name = 'exfat';   Size = 512;  Format = 'fs=exfat';           Letter = 'X' },
+            @{ Name = 'refs';    Size = 2048; Format = 'fs=refs';            Letter = 'R' },
+            @{ Name = 'fresh';   Size = 1024; Format = 'fs=ntfs unit=4096';  Letter = 'F' }
+          )
+          foreach ($v in $volumes) {
+            $file = Join-Path $base "$($v.Name).vhdx"
+            $script = Join-Path $base "$($v.Name).txt"
+            @(
+              "create vdisk file=`"$file`" maximum=$($v.Size) type=expandable",
+              "select vdisk file=`"$file`"",
+              "attach vdisk",
+              "convert mbr",
+              "create partition primary",
+              "format $($v.Format) quick label=$($v.Name)",
+              "assign letter=$($v.Letter)"
+            ) | Set-Content -Encoding ascii $script
+            diskpart /s $script | Out-String | Write-Host
+            if (Test-Path "$($v.Letter):\") { Write-Host "$($v.Name) is $($v.Letter):" } else { Write-Host "::warning::$($v.Name) could not be made" }
+          }
+          New-Item -ItemType Directory -Force -Path 'N:\probe', 'N:\share' | Out-Null
+          try {
+            New-SmbShare -Name scrimpprobe -Path 'N:\share' -FullAccess 'Everyone' | Out-Null
+            Write-Host 'Shared N:\share as \\localhost\scrimpprobe'
+          } catch {
+            Write-Host "::warning::Could not make the SMB share: $_"
+          }
+
+      # First run: the runner's own C: drive, where Windows itself already
+      # uses WOF, as a baseline. F: is a volume WOF is never attached to by
+      # hand, to see whether Windows attaches it by itself.
+      - name: 'Run the probe on C: drive'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path 'C:\probe-main' | Out-Null
+          & spikes\wof-probe\target\release\wof-probe.exe report-c.md --main 'C:\probe-main' `
+            --volume 'Runner C: drive=C:\' `
+            --fresh 'F:\'
+
+      # The WOF filter driver may not attach itself to a volume mounted
+      # after boot. Attach it to each test volume and log what changed.
+      - name: Attach WOF to the test volumes
+        shell: pwsh
+        run: |
+          fltmc instances -f wof | Out-String | Write-Host
+          foreach ($l in 'N','L','X','R') {
+            Write-Host "fltmc attach wof $($l):"
+            fltmc attach wof "$($l):" | Out-String | Write-Host
+          }
+          fltmc instances -f wof | Out-String | Write-Host
+
+      - name: Run the probe on the test volumes
+        shell: pwsh
+        run: |
+          & spikes\wof-probe\target\release\wof-probe.exe report.md --main 'N:\probe' `
+            --volume 'NTFS 4 KB clusters=N:\' `
+            --volume 'NTFS 64 KB clusters=L:\' `
+            --volume 'exFAT=X:\' `
+            --volume 'ReFS=R:\' `
+            --smb '\\localhost\scrimpprobe'
+          Get-Content report-c.md, report.md | Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: probe-report
+          path: report*.md
+          if-no-files-found: ignore
+
+      - name: Post the reports on the pull request
+        if: always() && github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for f in report-c.md report.md; do
+            [ -f "$f" ] || continue
+            head -c 65000 "$f" > comment.md
+            gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body-file comment.md
+          done
