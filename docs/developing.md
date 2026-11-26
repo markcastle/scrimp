@@ -30,6 +30,22 @@ Most of Scrimp only works on Windows, because it calls Windows' compression APIs
 
 Everything else is built and tested on GitHub's `windows-latest` runners. They run Windows Server as an administrator, so tests can create small VHDX volumes and compress real files on them. They can't show the Explorer menu the way people see it, so anything to do with the menu is also tried by hand on Windows 10 and Windows 11 and recorded under "Tried by a person" in [TASKS.md](../TASKS.md).
 
+### Testing against other kinds of drive
+
+`scrimp-win` behaves differently on NTFS with large clusters, exFAT, ReFS (as a Dev Drive is) and a drive Windows' compression driver isn't attached to, and its tests in `crates/scrimp-win/tests/volumes.rs` check each. They need small test drives, which `scripts/test-volumes.ps1` makes as VHDX files mounted as N:, L:, X:, R: and W:. CI makes them on every run.
+
+To run those tests on your own PC, open PowerShell as an administrator (mounting a VHDX needs it) and run:
+
+```powershell
+.\scripts\test-volumes.ps1
+```
+
+It prints the `SCRIMP_TEST_*` variables to set in the window you run `cargo test` from. Without them, those tests skip. When you're done:
+
+```powershell
+.\scripts\test-volumes.ps1 -Remove
+```
+
 ### Coverage
 
 CI measures test coverage on Windows and fails under 90% of lines. Code that compresses, decompresses, verifies or detects a file's state is held to 95% in review. To see coverage yourself on Windows:
