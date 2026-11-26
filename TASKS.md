@@ -43,11 +43,12 @@ Each of these follows [docs/windows-api.md](docs/windows-api.md).
 
 ## Phase 2: Compression engine
 
-- [ ] Automatic policy table, with change-prone and already-compressed skipping
+- [x] Automatic policy table, with change-prone and already-compressed skipping, protected Windows folders and per-extension overrides (`scrimp-core::policy`)
 - [ ] Streaming enumeration that never follows reparse points and counts hardlinks once
 - [ ] Scheduler: per-volume worker limits, bounded queue, pause and cancel between files
-- [ ] Reports built from outcomes
-- [ ] Free-space preflight for decompression
+- [x] Reports built from outcomes, in the plain words of the plan, with sizes as Explorer shows them (`scrimp-core::report`)
+- [x] Free-space check for decompression, keeping the larger of 1 GB or 2% free (`scrimp-core::space`)
+- [ ] Engine: run the free-space check before decompressing and again between files
 
 ## Phase 3: Command line, released as 0.1
 

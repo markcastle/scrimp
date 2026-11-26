@@ -5,6 +5,7 @@
 //! failure can never be shown as a success.
 
 use crate::algorithm::Algorithm;
+use crate::state::UnsupportedReason;
 
 /// A file's sizes in bytes: how big it is, and how much disk it used before
 /// and after.
@@ -39,10 +40,9 @@ pub enum SkipReason {
     ProtectedLocation,
     /// A Windows system file backed by an image file.
     WimBacked,
-    /// A cloud file that isn't on this computer yet.
-    CloudPlaceholder,
-    /// A link to another file or folder, which Scrimp doesn't follow.
-    Link,
+    /// The file can't be compressed where it is: a link, a cloud file, an
+    /// encrypted file, or a drive that doesn't support it.
+    CantCompressHere(UnsupportedReason),
     /// Another name for a file already handled in this job (a hardlink).
     SameFileAlreadyDone,
     /// The file's state couldn't be read, so it was left alone.
