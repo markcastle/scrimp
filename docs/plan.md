@@ -32,7 +32,7 @@ Each section says what we're building, why, and what we don't know yet. Section 
 
 ## 2. How Windows compression behaves
 
-These behaviours aren't obvious from the API docs and each one affects the design. Phase 0 confirms the ones marked "verify".
+These behaviours aren't obvious from the API docs and each one affects the design. Phase 0 tested them on real Windows; the full findings, including several surprises, are in [windows-api.md](windows-api.md).
 
 ### WOF-compressed files decompress when written to
 
@@ -79,11 +79,19 @@ CompactOS and WIM-backed files appear as WOF files with a different provider. Sc
 
 ### Compression is a blocking call per file
 
-Compressing a 100 GB file with LZX takes minutes in a single call. Cancellation normally takes effect between files. Phase 0 checks whether overlapped I/O plus `CancelIoEx` can safely cancel a large file mid-way.
+LZX ran at about 10 MiB per second on GitHub's runner, so a 1 GiB file is one call of well over a minute. Phase 0 found no way to cancel it part-way: overlapped I/O and `CancelSynchronousIo` both let it run to the end. Cancellation takes effect between files, and the UI says which file it is finishing.
 
-### Measuring "size on disk" (verify)
+### Measuring "size on disk"
 
-Explorer's "Size on disk" is correct for WOF files, so a reliable API exists. Phase 0 confirms which one we use: `GetCompressedFileSizeW`, `FILE_STANDARD_INFO.AllocationSize`, or the size of the `::$WofCompressedData` stream.
+`GetCompressedFileSizeW` matched the free space actually used, to the byte, for every method.
+
+### Opening a WOF file for writing undoes it
+
+Phase 0 found that simply opening a WOF-compressed file with write access decompresses it. Scrimp opens files read-only for all WOF work, which is all WOF needs.
+
+### WOF needs its driver attached to the volume
+
+On Windows Server, a VHDX mounted after boot had no WOF driver attached, and every WOF call failed, `compact.exe`'s included. Scrimp detects this and explains it rather than failing every file. Whether Windows 10 and 11 desktops behave the same is still to be tried.
 
 ## 3. Architecture
 
