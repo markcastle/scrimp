@@ -9,12 +9,13 @@
 //! - Nothing at all on a drive that can't compress (FAT32, exFAT, ReFS,
 //!   network).
 //! - With Shift held, Scrimp Compress opens a submenu: Automatic, Faster
-//!   to Open, Smallest, For Files That Change.
+//!   to Open, Smallest, For Files That Change. **Scrimp Savings…** shows
+//!   too, and says what the selection takes up, changing nothing.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use scrimp_core::{Algorithm, CompressionState, Target, jobs_folder};
+use scrimp_core::{Action, Algorithm, CompressionState, Target, jobs_folder};
 use windows::Win32::Foundation::{E_FAIL, E_NOTIMPL, E_UNEXPECTED, S_FALSE, S_OK};
 use windows::Win32::System::Com::{CoTaskMemAlloc, CoTaskMemFree, IBindCtx};
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_SHIFT};
@@ -51,11 +52,13 @@ pub(crate) fn guard<T>(f: impl FnOnce() -> Result<T>) -> Result<T> {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or_else(|_| Err(E_UNEXPECTED.into()))
 }
 
-/// Which of the two menu entries.
+/// Which of the menu entries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Kind {
     Compress,
     Decompress,
+    /// Only with Shift held.
+    Savings,
 }
 
 impl Kind {
@@ -63,11 +66,14 @@ impl Kind {
         match self {
             Kind::Compress => scrimp_core::shell_ids::COMPRESS_COMMAND,
             Kind::Decompress => scrimp_core::shell_ids::DECOMPRESS_COMMAND,
+            Kind::Savings => scrimp_core::shell_ids::SAVINGS_COMMAND,
         }
     }
 
     pub(crate) fn from_id(id: u128) -> Option<Kind> {
-        [Kind::Compress, Kind::Decompress].into_iter().find(|k| k.id() == id)
+        [Kind::Compress, Kind::Decompress, Kind::Savings]
+            .into_iter()
+            .find(|k| k.id() == id)
     }
 }
 
@@ -111,14 +117,16 @@ impl Command {
             (_, Some(i)) => CHOICES[i].0,
             (Kind::Compress, None) => "Scrimp Compress",
             (Kind::Decompress, None) => "Scrimp Decompress",
+            (Kind::Savings, None) => "Scrimp Savings…",
         }
     }
 
-    fn target(&self) -> Target {
+    fn action(&self) -> Action {
         match (self.kind, self.choice) {
-            (Kind::Decompress, _) => Target::Uncompressed,
-            (Kind::Compress, Some(i)) => CHOICES[i].1,
-            (Kind::Compress, None) => Target::Automatic,
+            (Kind::Savings, _) => Action::Savings,
+            (Kind::Decompress, _) => Action::Change(Target::Uncompressed),
+            (Kind::Compress, Some(i)) => Action::Change(CHOICES[i].1),
+            (Kind::Compress, None) => Action::Change(Target::Automatic),
         }
     }
 
@@ -138,6 +146,11 @@ impl Command {
         }
         if self.choice.is_some() {
             return Ok(true);
+        }
+        // Looking changes nothing, so it shows wherever the files are on
+        // this computer, but only for someone holding Shift.
+        if self.kind == Kind::Savings {
+            return Ok(shift_held());
         }
         // When Explorer can't wait, show the entry rather than ask to be
         // asked again: if Explorer never asks again, the worst case is an
@@ -165,6 +178,8 @@ impl Command {
                 (Kind::Compress, CompressionState::Compressed(_)) => shift_held(),
                 (Kind::Compress, CompressionState::Uncompressed) => true,
                 (Kind::Decompress, state) => state.is_compressed(),
+                // Decided above, before the disk is touched.
+                (Kind::Savings, _) => shift_held(),
             });
         }
         Ok(true)
@@ -257,7 +272,7 @@ impl IExplorerCommand_Impl for Command_Impl {
             let paths = paths_of(items)?;
             let jobs = jobs_folder().ok_or(E_FAIL)?;
             let worker = this_dll().as_deref().and_then(worker_beside).ok_or(E_FAIL)?;
-            submit(paths, self.target(), &jobs, &worker).map_err(|_| E_FAIL)?;
+            submit(paths, self.action(), &jobs, &worker).map_err(|_| E_FAIL)?;
             Ok(())
         })
     }

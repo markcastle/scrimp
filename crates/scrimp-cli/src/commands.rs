@@ -1,15 +1,14 @@
 //! Running each command on Windows: settings, the engine, progress, output
 //! and the exit code.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::HashSet;
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use scrimp_core::{
-    Algorithm, CompressionState, Control, Disk, DiskError, EntryKind, Event, FailReason, FileFacts, Job, Outcome,
-    Policy, Settings, SkipReason, Target, VolumeFacts, Workers, format_count, format_size,
+    Control, Event, FailReason, Job, Outcome, Preview, Settings, SkipReason, Target, Workers, format_count, format_size,
 };
 use scrimp_win::WindowsDisk;
 use serde_json::json;
@@ -167,52 +166,6 @@ impl Tally {
         } else {
             exit::OK
         }
-    }
-}
-
-/// A disk that reads but never changes anything: for `--dry-run` and
-/// `analyse`. Asked to compress or decompress, it reports the file as it
-/// is, so the engine's decisions show without any file changing.
-struct Preview<'a, D: Disk> {
-    inner: &'a D,
-    seen: Mutex<HashMap<PathBuf, FileFacts>>,
-}
-
-impl<'a, D: Disk> Preview<'a, D> {
-    fn new(inner: &'a D) -> Self {
-        Preview {
-            inner,
-            seen: Mutex::new(HashMap::new()),
-        }
-    }
-}
-
-impl<D: Disk> Disk for Preview<'_, D> {
-    fn kind(&self, path: &Path) -> Result<EntryKind, FailReason> {
-        self.inner.kind(path)
-    }
-    fn list(&self, folder: &Path) -> Result<Vec<(PathBuf, EntryKind)>, FailReason> {
-        self.inner.list(folder)
-    }
-    fn volume(&self, path: &Path) -> Result<VolumeFacts, FailReason> {
-        self.inner.volume(path)
-    }
-    fn free_space(&self, root: &Path) -> Result<u64, FailReason> {
-        self.inner.free_space(root)
-    }
-    fn inspect(&self, path: &Path) -> Result<FileFacts, DiskError> {
-        let facts = self.inner.inspect(path)?;
-        self.seen
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(path.to_path_buf(), facts.clone());
-        Ok(facts)
-    }
-    fn compress(&self, path: &Path, _: Algorithm) -> Result<FileFacts, DiskError> {
-        self.inner.inspect(path)
-    }
-    fn decompress(&self, path: &Path) -> Result<FileFacts, DiskError> {
-        self.inner.inspect(path)
     }
 }
 
@@ -381,118 +334,54 @@ fn inspect(look: &Look) -> i32 {
     code
 }
 
-/// How many files are in one state, and their sizes.
-#[derive(Default, Clone, Copy)]
-struct Group {
-    files: u64,
-    logical: u64,
-    on_disk: u64,
-}
-
-impl Group {
-    fn add(&mut self, facts: &FileFacts) {
-        self.files += 1;
-        self.logical += facts.logical;
-        self.on_disk += facts.on_disk;
-    }
-}
-
 /// `analyse`: what the selection takes now and what compressing would do,
 /// without changing anything.
 fn analyse(settings: &Settings, look: &Look) -> i32 {
     let control = cancel_on_ctrl_c();
-    let job = Job {
-        paths: look.paths.clone(),
-        target: Target::Automatic,
-    };
-    let preview = Preview::new(&WindowsDisk);
-    let policy: Policy = settings.policy();
     let mut tally = Tally::default();
     let mut progress = Progress::new(!look.json && std::io::stderr().is_terminal(), "Looking");
-    let report = scrimp_core::run(&job, &policy, &settings.workers, &preview, &control, |e| {
-        tally.add(e);
-        if matches!(e, Event::File { .. }) {
-            progress.tick();
-        }
-    });
+    let analysis = scrimp_core::analyse(
+        &look.paths,
+        &settings.policy(),
+        &settings.workers,
+        &WindowsDisk,
+        &control,
+        |e| {
+            tally.add(e);
+            if matches!(e, Event::File { .. }) {
+                progress.tick();
+            }
+        },
+    );
     progress.clear();
 
-    // Each file once, by state, in a fixed order.
-    let seen = preview.seen.into_inner().unwrap_or_else(PoisonError::into_inner);
-    let mut total = Group::default();
-    let mut by_state: BTreeMap<usize, (String, &'static str, Group)> = BTreeMap::new();
-    for (path, facts) in &seen {
-        if tally.duplicates.contains(path) {
-            continue;
-        }
-        total.add(facts);
-        let (order, label, key) = match &facts.state {
-            CompressionState::Uncompressed => (0, "Not compressed".to_string(), "uncompressed"),
-            CompressionState::Compressed(a) => (
-                1 + Algorithm::ALL.iter().position(|x| x == a).unwrap_or(0),
-                format!("Compressed with {}", a.technical_name()),
-                a.cli_name(),
-            ),
-            _ => (9, "Left alone by Scrimp".to_string(), "leftAlone"),
-        };
-        by_state
-            .entry(order)
-            .or_insert((label, key, Group::default()))
-            .2
-            .add(facts);
-    }
-    let name = name_of(&look.paths).unwrap_or_else(|| "The selection".into());
-    let lines: Vec<String> = report.summary(None).into_iter().skip(1).collect();
-
     if look.json {
-        let states: serde_json::Map<String, serde_json::Value> = by_state
-            .values()
-            .map(|(_, key, g)| {
+        let states: serde_json::Map<String, serde_json::Value> = analysis
+            .by_state
+            .iter()
+            .map(|s| {
+                let g = &s.group;
                 (
-                    (*key).to_string(),
+                    s.key.to_string(),
                     json!({ "files": g.files, "logicalBytes": g.logical, "onDiskBytes": g.on_disk }),
                 )
             })
             .collect();
+        let t = &analysis.total;
         let mut v = json!({
             "schemaVersion": json::SCHEMA_VERSION, "type": "analysis",
-            "files": total.files, "logicalBytes": total.logical, "onDiskBytes": total.on_disk,
+            "files": t.files, "logicalBytes": t.logical, "onDiskBytes": t.on_disk,
             "byState": states,
-            "wouldCompress": { "files": tally.would_change, "logicalBytes": tally.would_bytes },
-            "lines": lines,
+            "wouldCompress": { "files": analysis.would_compress.files, "logicalBytes": analysis.would_compress.logical },
+            "lines": analysis.notes,
         });
         if control.is_cancelled() {
             v["cancelled"] = json!(true);
         }
         println!("{v}");
     } else {
-        let files = |n: u64| {
-            if n == 1 {
-                "1 file".to_string()
-            } else {
-                format!("{} files", format_count(n))
-            }
-        };
-        println!(
-            "{name}: {}, {}, taking {} on disk.",
-            files(total.files),
-            format_size(total.logical),
-            format_size(total.on_disk)
-        );
-        for (label, _, g) in by_state.values() {
-            if g.on_disk == g.logical {
-                println!("  {label}: {}, {}.", files(g.files), format_size(g.logical));
-            } else {
-                println!(
-                    "  {label}: {}, {}, taking {} on disk.",
-                    files(g.files),
-                    format_size(g.logical),
-                    format_size(g.on_disk)
-                );
-            }
-        }
-        println!("{}", dry_run_headline(&tally, false));
-        lines.iter().for_each(|l| println!("{l}"));
+        let name = name_of(&look.paths).unwrap_or_else(|| "The selection".into());
+        analysis.lines(&name).iter().for_each(|l| println!("{l}"));
     }
     tally.exit_code(&control)
 }

@@ -629,3 +629,112 @@ fn worker_counts_follow_the_drive_and_the_processors() {
     };
     assert_eq!(fixed.for_storage(Storage::Hdd, 16), 2, "--workers wins");
 }
+
+#[test]
+fn analysis_changes_nothing_and_counts_each_file_once() {
+    let disk = FakeDisk::new();
+    disk.file("D:/Games/game.exe", 100_000);
+    disk.file("D:/Games/intro.mp4", 900_000);
+    disk.put(
+        "D:/Games/old.dat",
+        Node {
+            state: CompressionState::Compressed(Algorithm::Lzx),
+            logical: 200_000,
+            on_disk: 50_000,
+            ..blank()
+        },
+    );
+    let id = Some(FileId { volume: 7, file: 9 });
+    for name in ["D:/Games/a.txt", "D:/Games/b.txt"] {
+        disk.put(
+            name,
+            Node {
+                logical: 10_000,
+                on_disk: 10_000,
+                id,
+                ..blank()
+            },
+        );
+    }
+    let mut seen = 0;
+    let a = analyse(
+        &[PathBuf::from("D:/Games")],
+        &Policy::default(),
+        &Workers {
+            fixed: Some(1),
+            ..Workers::default()
+        },
+        &disk,
+        &Control::new(),
+        |_| seen += 1,
+    );
+    assert_eq!(seen, 5, "every name is reported for progress");
+    assert_eq!(disk.compress_calls.load(Ordering::SeqCst), 0, "nothing changes");
+    assert_eq!(disk.state("D:/Games/game.exe"), CompressionState::Uncompressed);
+
+    assert_eq!(a.total.files, 4, "the file with two names is counted once");
+    assert_eq!(a.total.logical, 1_210_000);
+    assert_eq!(a.total.on_disk, 1_060_000);
+    assert_eq!(a.total.saved(), 150_000);
+    let keys: Vec<_> = a.by_state.iter().map(|s| s.key).collect();
+    assert_eq!(keys, ["uncompressed", "lzx"]);
+    assert_eq!(a.would_compress.files, 2, "game.exe and the shared text file");
+
+    let lines = a.lines("Games");
+    assert_eq!(lines[0], "Games: 4 files, 1.2 MB, taking 1.0 MB on disk.");
+    assert!(
+        lines.iter().any(|l| l.starts_with("  Compressed with LZX: 1 file")),
+        "{lines:?}"
+    );
+    assert!(
+        lines.iter().any(|l| l.starts_with("Scrimp would compress 2 files")),
+        "{lines:?}"
+    );
+
+    let (headline, body) = a.savings("Games");
+    assert_eq!(headline, "Compression saves 146.5 KB in Games");
+    assert_eq!(body[0], "It takes up 1.0 MB instead of 1.2 MB.");
+    assert!(a.details().contains("Not compressed: 3 files"), "{}", a.details());
+}
+
+#[test]
+fn savings_say_plainly_when_nothing_is_compressed_or_there_is_nothing() {
+    let disk = FakeDisk::new();
+    disk.file("D:/Videos/holiday.mp4", 900_000);
+    let a = analyse(
+        &[PathBuf::from("D:/Videos")],
+        &Policy::default(),
+        &Workers::default(),
+        &disk,
+        &Control::new(),
+        |_| {},
+    );
+    let (headline, body) = a.savings("Videos");
+    assert_eq!(headline, "Videos isn't compressed");
+    assert_eq!(body[0], "It takes up 878.9 KB.");
+    assert!(
+        !body.iter().any(|l| l.starts_with("Scrimp would")),
+        "nothing to compress: {body:?}"
+    );
+    assert_eq!(a.would_compress_line(), "Nothing needs compressing.");
+
+    let disk = FakeDisk::new();
+    disk.put(
+        "D:/Empty",
+        Node {
+            kind: EntryKind::Folder,
+            ..blank()
+        },
+    );
+    let a = analyse(
+        &[PathBuf::from("D:/Empty")],
+        &Policy::default(),
+        &Workers::default(),
+        &disk,
+        &Control::new(),
+        |_| {},
+    );
+    let (headline, body) = a.savings("Empty");
+    assert_eq!(headline, "Empty has no files Scrimp can look at");
+    assert!(body.is_empty());
+}

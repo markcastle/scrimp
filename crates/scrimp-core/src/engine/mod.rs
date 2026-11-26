@@ -26,6 +26,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 
+mod analysis;
+
+pub use analysis::{Analysis, Group, Preview, StateGroup, analyse};
+
 use crate::algorithm::{Algorithm, Target};
 use crate::outcome::{FailReason, Outcome, Sizes, SkipReason};
 use crate::policy::{Plan, Policy};

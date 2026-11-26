@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use scrimp_core::Algorithm;
-use scrimp_core::shell_ids::{COMPRESS_COMMAND, DECOMPRESS_COMMAND};
+use scrimp_core::shell_ids::{COMPRESS_COMMAND, DECOMPRESS_COMMAND, SAVINGS_COMMAND};
 use windows::Win32::Foundation::{CLASS_E_CLASSNOTAVAILABLE, E_NOTIMPL, E_UNEXPECTED, S_FALSE};
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoTaskMemFree, IClassFactory};
 use windows::Win32::UI::Shell::Common::ITEMIDLIST;
@@ -81,10 +81,11 @@ fn text_file(dir: &Path, name: &str) -> PathBuf {
 }
 
 #[test]
-fn explorer_gets_both_commands_and_nothing_else() {
+fn explorer_gets_the_three_commands_and_nothing_else() {
     com();
     assert_eq!(title(&command(COMPRESS_COMMAND)), "Scrimp Compress");
     assert_eq!(title(&command(DECOMPRESS_COMMAND)), "Scrimp Decompress");
+    assert_eq!(title(&command(SAVINGS_COMMAND)), "Scrimp Savings…");
 
     let mut object: *mut std::ffi::c_void = std::ptr::null_mut();
     let other = GUID::from_u128(0x1234);
@@ -219,4 +220,16 @@ fn the_dll_stays_loaded_while_its_objects_are_in_use() {
     let held = command(COMPRESS_COMMAND);
     assert_eq!(DllCanUnloadNow(), S_FALSE);
     drop(held);
+}
+
+#[test]
+fn savings_only_shows_with_shift_held() {
+    com();
+    let dir = tempfile::tempdir().unwrap();
+    let selection = items(&[dir.path()]);
+    // The tests never hold Shift.
+    assert_eq!(state(&command(SAVINGS_COMMAND), &selection, true), HIDDEN);
+    assert_eq!(state(&command(SAVINGS_COMMAND), &selection, false), HIDDEN);
+    let share = items(&[Path::new(r"\\localhost\C$")]);
+    assert_eq!(state(&command(SAVINGS_COMMAND), &share, true), HIDDEN);
 }

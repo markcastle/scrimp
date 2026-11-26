@@ -58,7 +58,7 @@ cargo build --workspace
 .\target\debug\scrimpw.exe --register
 ```
 
-Right-click a file or folder. On Windows 10 you'll see **Scrimp Compress** and **Scrimp Decompress**; on Windows 11 they're under **Show more options** (or Shift + right-click). Hold Shift to see the choices under Scrimp Compress.
+Right-click a file or folder. On Windows 10 you'll see **Scrimp Compress** and **Scrimp Decompress**; on Windows 11 they're under **Show more options** (or Shift + right-click). Hold Shift to see the choices under Scrimp Compress, and **Scrimp Savings…**.
 
 Explorer keeps the DLL loaded once it has used it, so to try a new build, take the menu out, restart Explorer, rebuild, and add it again:
 
