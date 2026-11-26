@@ -266,6 +266,14 @@ mod tests {
     use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, PostMessageW, WM_CLOSE};
 
     /// Waits for the dialog titled `title`, then sends it `press`.
+    /// Dialogs are shown one at a time, as a person would see them: opened
+    /// from several test threads at once, one sometimes fails to open.
+    static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn one_at_a_time() -> std::sync::MutexGuard<'static, ()> {
+        ONE_AT_A_TIME.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     /// Returns whether the dialog was found.
     fn press_when_shown(
         title: &'static str,
@@ -297,6 +305,7 @@ mod tests {
 
     #[test]
     fn pressing_a_dialogs_own_button_says_which() {
+        let _one = one_at_a_time();
         let presser = press_when_shown("Scrimp ui test: own button", |hwnd| click(hwnd, FIRST_BUTTON + 1));
         let pressed = ask(
             "Scrimp ui test: own button",
@@ -321,6 +330,7 @@ mod tests {
 
     #[test]
     fn closing_a_message_is_not_a_choice() {
+        let _one = one_at_a_time();
         let presser = press_when_shown("Scrimp ui test: close", |hwnd| {
             // SAFETY: as in `click`.
             let _ = unsafe { PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0)) };
@@ -336,6 +346,7 @@ mod tests {
 
     #[test]
     fn progress_follows_the_work_and_closes_itself_when_done() {
+        let _one = one_at_a_time();
         let mut polls = 0;
         let mut poll = || {
             polls += 1;
@@ -353,6 +364,7 @@ mod tests {
 
     #[test]
     fn cancel_asks_the_work_to_stop_and_waits_for_it() {
+        let _one = one_at_a_time();
         let presser = press_when_shown("Scrimp ui test: cancel progress", |hwnd| click(hwnd, IDCANCEL as i32));
         let cancelled = std::sync::atomic::AtomicBool::new(false);
         let started = Instant::now();
