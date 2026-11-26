@@ -32,8 +32,14 @@ pub enum UnsupportedReason {
     NetworkLocation,
     /// Encrypted with Windows' file encryption (EFS), which can't be combined with compression.
     Encrypted,
-    /// A cloud file that isn't on this computer yet; compressing it would download it.
+    /// A cloud file (OneDrive and similar). Compressing it could download it,
+    /// or upset the sync app that owns it.
     CloudPlaceholder,
+    /// A symbolic link or junction. Scrimp never follows links.
+    Link,
+    /// Another special kind of file Windows manages itself, such as a
+    /// deduplicated one.
+    SpecialFile,
 }
 
 impl CompressionState {
@@ -79,6 +85,8 @@ mod tests {
             UnsupportedReason::NetworkLocation,
             UnsupportedReason::Encrypted,
             UnsupportedReason::CloudPlaceholder,
+            UnsupportedReason::Link,
+            UnsupportedReason::SpecialFile,
         ] {
             assert!(!CompressionState::Unsupported(reason).can_change());
         }

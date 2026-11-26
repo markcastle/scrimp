@@ -43,7 +43,8 @@ Add a row when a crate is added, with why.
 | `clap` | `scrimp-cli` | Argument parsing and `--version` |
 | `thiserror` | `scrimp-core` | Typed errors |
 | `anyhow`, `regex` | `xtask` | Errors and changelog parsing in tooling |
-| `tempfile` | `xtask` tests | Throwaway git repositories for release tests |
+| `tempfile` | `xtask` and `scrimp-win` tests | Throwaway git repositories and test files |
+| `windows` | `scrimp-win` | Microsoft's bindings to the Windows API |
 
 ## Platforms
 

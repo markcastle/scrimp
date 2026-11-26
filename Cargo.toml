@@ -11,12 +11,24 @@ repository = "https://github.com/markcastle/scrimp"
 
 [workspace.dependencies]
 scrimp-core = { path = "crates/scrimp-core" }
+scrimp-win = { path = "crates/scrimp-win" }
 
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 regex = "1"
 tempfile = "3"
 thiserror = "2"
+# Microsoft's own bindings to the Windows API. Only scrimp-win (and later
+# scrimp-shell) use it, and only on Windows.
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+    "Win32_System_SystemServices",
+    "Win32_System_WindowsProgramming",
+] }
 
 [workspace.lints.rust]
 # Denied everywhere. The two crates that must call Windows directly
