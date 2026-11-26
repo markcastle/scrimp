@@ -711,7 +711,7 @@ The CLI on its own (`scrimp-windows-x64.exe`), as Keevoro publishes `keevoro-win
 - [x] Native Rust, no managed runtime, no runtime DLLs beyond Windows: `cargo xtask imports` in CI and in releases
 - [x] XPRESS4K, XPRESS8K, XPRESS16K, LZX and LZNT1 compression and decompression: `crates/scrimp-win/tests/round_trip.rs`
 - [x] Byte-for-byte integrity across every algorithm change in CI: `every_change_between_methods_keeps_the_content_and_lands_exactly`
-- [x] Clear handling of unsupported volumes, including Dev Drives: `crates/scrimp-win/tests/volumes.rs` on CI's exFAT, FAT32, ReFS and 64 KB-cluster drives; Dev Drives called by name
+- [x] Clear handling of unsupported volumes, including Dev Drives: `crates/scrimp-win/tests/volumes.rs` on CI's exFAT, ReFS, 64 KB-cluster and no-WOF drives; Dev Drives called by name
 - [ ] Explorer menu on Windows 10 and in Windows 11's "Show more options" and Shift + right-click menus: built and tested through the shell's own interfaces (`crates/scrimp-shell/src/tests.rs`); waiting for a person to try it in Explorer (TASKS.md, Tried by a person, S6)
 - [ ] Files, multiple selections, folders and drives: tested through the shell's interfaces and the engine; waiting for a person to try them in Explorer (S6)
 - [x] Current state and real savings reported: `scrimp inspect`, `scrimp analyse` and Scrimp Savings…, from one analysis in `scrimp-core`
