@@ -346,4 +346,51 @@ mod tests {
         assert_eq!(wim.state, CompressionState::WimBacked);
         assert!(!wim.state.can_change());
     }
+
+    /// A cloud file that isn't on this PC is marked offline. Scrimp must not
+    /// open it, because opening could download it, so it's recognised from
+    /// its attributes alone and never changed.
+    #[test]
+    fn an_offline_file_is_left_alone_without_being_opened() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("cloud.txt");
+        std::fs::write(&p, "Example.dat moved to D:\\Archive.\n".repeat(10_000)).unwrap();
+        let normal = std::fs::metadata(&p).unwrap().file_attributes();
+        ffi::set_attributes(&p, normal | ATTRIBUTE_OFFLINE).unwrap();
+
+        let info = inspect(&p).unwrap();
+        assert_eq!(
+            info.state,
+            CompressionState::Unsupported(UnsupportedReason::CloudPlaceholder)
+        );
+        assert_eq!(info.id, None, "never opened");
+        assert_eq!(
+            compress(&p, Algorithm::Lzx),
+            Err(Error::LeftAlone(CompressionState::Unsupported(
+                UnsupportedReason::CloudPlaceholder
+            )))
+        );
+        ffi::set_attributes(&p, normal).unwrap();
+        assert_eq!(inspect(&p).unwrap().state, CompressionState::Uncompressed);
+    }
+
+    /// Decompressing a link would change the file it points to, somewhere
+    /// the person never selected, so it is refused like compressing is.
+    #[test]
+    fn a_link_is_never_decompressed() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("target.txt");
+        std::fs::write(&target, "Example.dat moved to D:\\Archive.\n".repeat(10_000)).unwrap();
+        let link = dir.path().join("link.txt");
+        if let Err(e) = std::os::windows::fs::symlink_file(&target, &link) {
+            // Making a link needs administrator rights or Developer Mode.
+            // GitHub's runners have them, so CI never skips this.
+            assert!(std::env::var_os("CI").is_none(), "couldn't make a link on CI: {e}");
+            return;
+        }
+        assert_eq!(
+            decompress(&link),
+            Err(Error::LeftAlone(CompressionState::Unsupported(UnsupportedReason::Link)))
+        );
+    }
 }

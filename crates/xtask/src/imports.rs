@@ -17,6 +17,8 @@ const WINDOWS_DLLS: &[&str] = &[
     "advapi32.dll",
     "bcrypt.dll",
     "bcryptprimitives.dll",
+    // COM's own runtime, which the Explorer menu and the dialogs use.
+    "combase.dll",
     "comctl32.dll",
     "crypt32.dll",
     "kernel32.dll",
