@@ -64,6 +64,16 @@ Scrimp would compress 5,138 files, 62.0 GB in all. How much that saves depends o
 
 Changes nothing. `analyze` works too.
 
+### Update
+
+```powershell
+scrimp update
+```
+
+Checks GitHub for a newer release and installs it. If Scrimp was installed with the installer, the new installer is downloaded, checked and started quietly, and it carries on once `scrimp` has finished. If only the command line was installed, the new `scrimp.exe` takes the old one's place.
+
+`scrimp update --check` only says whether there's a newer version. Scrimp never checks by itself: this is the only time it contacts the internet, and only when you run it. Every download is checked against the release's `SHA256SUMS` file, and one that doesn't match is thrown away.
+
 ## Options
 
 | Option | Works with | What it does |

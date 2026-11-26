@@ -31,7 +31,7 @@ The promise, in their words:
 | `scrimp-cli` | `scrimp.exe`, the command line | |
 | `scrimpw` | The worker: runs jobs from the menu, shows progress and results | One per user; takes jobs from `%LOCALAPPDATA%\Scrimp\jobs` |
 | `scrimp-shell` | The Explorer menu DLL (`IExplorerCommand`) | Never compresses anything itself; hands the selection to `scrimpw` |
-| `scrimp-update` | `scrimp update`: finds, checks and installs a newer release | Added in phase 5, adapted from Keevoro |
+| `scrimp-update` | `scrimp update`: finds, checks and installs a newer release | Adapted from Keevoro's `keevoro-update` |
 | `xtask` | Project tooling: the changelog and cutting a release | From Keevoro |
 
 ## Crates in use
@@ -42,6 +42,7 @@ Add a row when a crate is added, with why.
 | --- | --- | --- |
 | `clap` | `scrimp-cli` | Argument parsing and `--version` |
 | `ctrlc` | `scrimp-cli` | Ctrl+C cancels a job between files |
+| `ureq`, `sha2` | `scrimp-update` | Reading GitHub Releases and checking downloads, as Keevoro does |
 | `serde_json` | `scrimp-cli` | `--json` output |
 | `thiserror` | `scrimp-core` | Typed errors |
 | `serde`, `serde_json` | `scrimp-core` | Reading `settings.json` |

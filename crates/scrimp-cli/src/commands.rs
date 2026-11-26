@@ -14,7 +14,7 @@ use scrimp_core::{
 use scrimp_win::WindowsDisk;
 use serde_json::json;
 
-use crate::cli::{Change, Cli, Command, Look, exit};
+use crate::cli::{Change, Cli, Command, Look, Update, exit};
 use crate::{json, words};
 
 pub fn run(cli: Cli) -> i32 {
@@ -30,6 +30,26 @@ pub fn run(cli: Cli) -> i32 {
         Command::Decompress(c) => change(&settings, &c, Target::Uncompressed),
         Command::Inspect(look) => inspect(&look),
         Command::Analyse(look) => analyse(&settings, &look),
+        Command::Update(u) => update(&u),
+    }
+}
+
+/// `update`: the newest release, checked, put in place the way this copy
+/// was installed.
+fn update(args: &Update) -> i32 {
+    let Ok(exe) = std::env::current_exe() else {
+        eprintln!("Couldn't tell where Scrimp is installed.");
+        return exit::FATAL;
+    };
+    let web = scrimp_update::GitHub::from_env();
+    match scrimp_update::run(&web, env!("CARGO_PKG_VERSION"), &exe, args.check, &mut |line| {
+        println!("{line}")
+    }) {
+        Ok(()) => exit::OK,
+        Err(e) => {
+            eprintln!("{e}.");
+            exit::SOME_FAILED
+        }
     }
 }
 
