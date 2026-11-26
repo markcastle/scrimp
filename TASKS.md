@@ -23,7 +23,7 @@ Findings are in [docs/windows-api.md](docs/windows-api.md).
 - [x] S4: can a long compression of one large file be cancelled safely
 - [x] S5: behaviour on ReFS, exFAT, 64 KB clusters, mounted VHDX and EFS
 - [ ] S6: `IExplorerCommand` from Rust, registered under `HKCU`, on Windows 10 and the Windows 11 full menu; Shift detection; `GetState` when Explorer can't wait (needs a real PC)
-- [ ] S7: an installer upgrade while Explorer holds the old DLL (needs a real PC)
+- [ ] S7: an installer upgrade while Explorer holds the old DLL (needs a real PC; the installer is ready to try it with)
 
 ### Native layer
 
@@ -69,7 +69,7 @@ Each of these follows [docs/windows-api.md](docs/windows-api.md).
 ## Phase 5: Interface, installer and updates, released as 0.3
 
 - [ ] Results dialog, Save report, Try Again as Administrator, Scrimp Savings…, first-use message
-- [ ] NSIS installer, per user, with `--register` and `--unregister`
+- [x] NSIS installer, per user, with `--register --add-to-path` and `--unregister`, tested install, reinstall and uninstall in CI
 - [ ] `scrimp update`
 
 ## Phase 6: Hardening, released as 1.0

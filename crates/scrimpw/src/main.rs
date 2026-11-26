@@ -14,7 +14,8 @@
 //! scrimpw.exe --quiet              no windows: write the summary to the console, for tests
 //! scrimpw.exe --jobs-folder DIR    use another jobs folder, for tests
 //! scrimpw.exe --register           add Scrimp to Explorer's menu for this user
-//! scrimpw.exe --unregister         take it out again
+//! scrimpw.exe --register --add-to-path   and add its folder to the user's PATH (the installer does this)
+//! scrimpw.exe --unregister         take both out again
 //! ```
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
@@ -34,6 +35,7 @@ struct Args {
     quiet: bool,
     jobs_folder: Option<PathBuf>,
     register: bool,
+    add_to_path: bool,
     unregister: bool,
 }
 
@@ -45,6 +47,7 @@ impl Args {
             match a.as_str() {
                 "--quiet" => out.quiet = true,
                 "--register" => out.register = true,
+                "--add-to-path" => out.add_to_path = true,
                 "--unregister" => out.unregister = true,
                 "--jobs-folder" => out.jobs_folder = args.next().map(PathBuf::from),
                 // `--job FILE` names the job just written. Every waiting job
@@ -102,6 +105,7 @@ mod tests {
         );
         assert_eq!(parse(&["--job"]), Args::default());
         assert!(parse(&["--register"]).register);
+        assert!(parse(&["--register", "--add-to-path"]).add_to_path);
         assert!(parse(&["--unregister", "--quiet"]).unregister);
     }
 }

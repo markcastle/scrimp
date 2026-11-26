@@ -41,8 +41,12 @@ mod instance;
 pub mod menu;
 #[cfg(windows)]
 mod path;
+#[cfg(windows)]
+pub mod registry;
 #[cfg(all(windows, feature = "ui"))]
 pub mod ui;
+#[cfg(windows)]
+pub mod user_path;
 #[cfg(windows)]
 mod volume;
 

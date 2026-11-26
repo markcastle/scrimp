@@ -55,9 +55,30 @@ fn find_dll(exe_folder: &Path) -> Option<PathBuf> {
     [installed, built].into_iter().find(|p| p.is_file())
 }
 
+/// Removes the folders of older versions' menu DLLs from `shell\`. Explorer
+/// may still have one loaded, which Windows won't let go; that folder is
+/// left for next time.
+fn clean_old_shells(exe_folder: &Path) {
+    let Ok(entries) = std::fs::read_dir(exe_folder.join("shell")) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if entry.file_name() != env!("CARGO_PKG_VERSION") && entry.path().is_dir() {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
+}
+
 fn menu(args: &Args) -> ExitCode {
+    let exe_folder = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf));
     if args.unregister {
-        return match scrimp_win::menu::unregister() {
+        let removed = scrimp_win::menu::unregister().and_then(|()| match &exe_folder {
+            Some(folder) => scrimp_win::user_path::remove(folder).map(|_| ()),
+            None => Ok(()),
+        });
+        return match removed {
             Ok(()) => {
                 say(args, "Scrimp is no longer in Explorer's menu", "", None);
                 ExitCode::SUCCESS
@@ -73,10 +94,7 @@ fn menu(args: &Args) -> ExitCode {
             }
         };
     }
-    let dll = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().and_then(find_dll));
-    let Some(dll) = dll else {
+    let Some((folder, dll)) = exe_folder.and_then(|f| find_dll(&f).map(|d| (f, d))) else {
         say(
             args,
             "Scrimp couldn't be added to Explorer's menu",
@@ -85,7 +103,15 @@ fn menu(args: &Args) -> ExitCode {
         );
         return ExitCode::from(5);
     };
-    match scrimp_win::menu::register(&dll) {
+    let added = scrimp_win::menu::register(&dll).and_then(|()| {
+        if args.add_to_path {
+            scrimp_win::user_path::add(&folder).map(|_| ())
+        } else {
+            Ok(())
+        }
+    });
+    clean_old_shells(&folder);
+    match added {
         Ok(()) => {
             say(
                 args,
@@ -328,6 +354,23 @@ mod tests {
             Some(versioned.join("scrimp_shell.dll")),
             "installed wins"
         );
+    }
+
+    #[test]
+    fn old_menu_dlls_are_cleared_but_this_versions_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let shell = dir.path().join("shell");
+        for v in ["0.1.0", env!("CARGO_PKG_VERSION")] {
+            std::fs::create_dir_all(shell.join(v)).unwrap();
+            std::fs::write(shell.join(v).join("scrimp_shell.dll"), "").unwrap();
+        }
+        clean_old_shells(dir.path());
+        let left: Vec<_> = std::fs::read_dir(&shell)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(left, [env!("CARGO_PKG_VERSION")]);
+        clean_old_shells(&dir.path().join("missing"));
     }
 
     #[test]

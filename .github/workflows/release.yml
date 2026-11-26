@@ -6,8 +6,8 @@ name: Release
 # blank and the changelog decides it: a minor release if anything is listed
 # as Added or Removed under Unreleased, otherwise a patch. Type one to choose
 # yourself. This workflow then dates the changelog, sets the version,
-# commits, tags, builds scrimp.exe for Windows (and, from 0.3, the
-# installer), and publishes the GitHub Release. Only people with write access to the repository can
+# commits, tags, builds scrimp.exe and the installer for Windows, and
+# publishes the GitHub Release. Only people with write access to the repository can
 # press it. Tick "Rehearse" to see what it would do without pushing, building
 # or publishing anything.
 #
@@ -300,14 +300,39 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "v${{ needs.prepare.outputs.version }}" "$ASSET" --clobber
 
-  # From 0.3 an "installer" job joins this one: it runs
-  # scripts/build-installer.sh (makensis) and uploads
-  # Scrimp-windows-x64-setup.exe, and the publish job below adds that file
-  # to the list it insists on.
+  # The installer, built the same way CI builds it.
+  installer:
+    name: Installer (Windows x64)
+    needs: prepare
+    if: ${{ !inputs.dry_run }}
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refs/tags/v${{ needs.prepare.outputs.version }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: installer
+
+      - name: Build the installer
+        env:
+          SCRIMP_VERSION: ${{ needs.prepare.outputs.version }}
+        run: scripts/build-installer.sh
+
+      - name: Upload to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "v${{ needs.prepare.outputs.version }}" installers/Scrimp-windows-x64-setup.exe --clobber
 
   publish:
     name: Publish
-    needs: [prepare, build]
+    needs: [prepare, build, installer]
     runs-on: ubuntu-latest
     steps:
       - name: Add checksums and open the release
@@ -318,7 +343,7 @@ jobs:
           version="${{ needs.prepare.outputs.version }}"
           mkdir assets && cd assets
           gh release download "v$version" --pattern 'scrimp-*' --pattern 'Scrimp-*'
-          needed_files="scrimp-windows-x64.exe"
+          needed_files="scrimp-windows-x64.exe Scrimp-windows-x64-setup.exe"
           for needed in $needed_files; do
             if [ ! -s "$needed" ]; then
               echo "::error::v$version has no $needed on it, so it stays a draft. Check the build jobs."
