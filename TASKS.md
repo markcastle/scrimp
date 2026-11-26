@@ -16,22 +16,27 @@ Work top to bottom. Each task is done when its tests pass, clippy is clean and c
 
 ### Phase 0 questions, answered on GitHub's Windows runners where possible
 
-Findings go in `docs/windows-api.md`.
+Findings are in [docs/windows-api.md](docs/windows-api.md).
 
-- [ ] S1: `WofSetFileDataLocation` or `FSCTL_SET_EXTERNAL_BACKING`; minimum access rights; are timestamps preserved; read-only files
-- [ ] S2: which API gives the true on-disk size of a WOF file
-- [ ] S3: when Windows reports compression as not beneficial, and the state it leaves the file in
-- [ ] S4: can a long compression of one large file be cancelled safely
-- [ ] S5: behaviour on ReFS, exFAT, 64 KB clusters, mounted VHDX and EFS
+- [x] S1: `WofSetFileDataLocation` or `FSCTL_SET_EXTERNAL_BACKING`; minimum access rights; are timestamps preserved; read-only files
+- [x] S2: which API gives the true on-disk size of a WOF file
+- [x] S3: when Windows reports compression as not beneficial, and the state it leaves the file in
+- [x] S4: can a long compression of one large file be cancelled safely
+- [x] S5: behaviour on ReFS, exFAT, 64 KB clusters, mounted VHDX and EFS
 - [ ] S6: `IExplorerCommand` from Rust, registered under `HKCU`, on Windows 10 and the Windows 11 full menu; Shift detection; `GetState` when Explorer can't wait (needs a real PC)
 - [ ] S7: an installer upgrade while Explorer holds the old DLL (needs a real PC)
 
 ### Native layer
 
-- [ ] `scrimp-win`: inspect a file's compression state and sizes
-- [ ] `scrimp-win`: compress with each WOF algorithm and with NTFS compression
-- [ ] `scrimp-win`: decompress both kinds
-- [ ] `scrimp-win`: volume capabilities (filesystem, cluster size, drive type)
+Each of these follows [docs/windows-api.md](docs/windows-api.md).
+
+- [ ] `scrimp-win`: inspect a file's compression state and sizes (`WofIsExternalFile` with `WOF_FILE_COMPRESSION_INFO_V1`, `FSCTL_GET_COMPRESSION`, `GetCompressedFileSizeW`); a file with both WOF and NTFS compression reads as unknown
+- [ ] `scrimp-win`: compress with each WOF algorithm through `WofSetFileDataLocation`, opening with `GENERIC_READ` only, with a test that reads each algorithm back
+- [ ] `scrimp-win`: NTFS compression, clearing and restoring read-only, and undoing it when nothing was saved
+- [ ] `scrimp-win`: remove NTFS compression before applying WOF
+- [ ] `scrimp-win`: decompress both kinds, with read-only access for WOF
+- [ ] `scrimp-win`: volume capabilities from the filesystem name and cluster size, never from error codes alone (ReFS answers "would not save space")
+- [ ] `scrimp-win`: recognise "WOF isn't running on this drive" (error 1 on NTFS) and stop trying WOF there for the rest of the job
 - [ ] VHDX fixture volumes created in CI
 - [ ] Round-trip tests: every algorithm and every change between algorithms leaves files byte-for-byte identical
 
@@ -70,4 +75,9 @@ Findings go in `docs/windows-api.md`.
 
 Things CI can't prove. Tick them when someone has tried them on a real PC.
 
-- [ ] Nothing to try yet
+- [ ] Does Windows 10 or 11 attach WOF by itself to a VHDX mounted after boot? (On Windows Server it doesn't.)
+- [ ] Is `COMPRESS_ON_WRITE` accepted on Windows 11 24H2 or 25H2, and does a written file stay compressed?
+- [ ] After WOF compresses an EFS-encrypted file, is it still encrypted and readable?
+- [ ] How fast is LZX on a typical desktop, against the runner's 10 MiB per second?
+
+`spikes/wof-probe` answers most of these; see [docs/windows-api.md](docs/windows-api.md#running-the-probe-yourself).
