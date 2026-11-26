@@ -1,5 +1,11 @@
 # cargo deny: the rules every dependency must meet. CI runs it on every change.
 
+[graph]
+# Only the platforms Scrimp is built for: Windows, which ships, and Linux,
+# where CI tests the portable crates. Without this, crates used only on other
+# platforms (such as wasm32's bundled certificate roots) are checked too.
+targets = ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
+
 [advisories]
 # Any crate with a known security advisory fails the build.
 yanked = "deny"
