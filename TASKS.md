@@ -39,7 +39,7 @@ Each of these follows [docs/windows-api.md](docs/windows-api.md).
 - [x] `scrimp-win`: recognise "WOF isn't running on this drive" (error 1 from a WOF call becomes `Error::WofUnavailable`)
 - [ ] Engine: stop trying WOF on a drive for the rest of the job after `WofUnavailable`, and offer NTFS compression instead (Phase 2)
 - [x] Round-trip tests on the system drive: every algorithm and every change between algorithms leaves files byte-for-byte identical
-- [ ] VHDX fixture volumes in CI (64 KB clusters, exFAT, ReFS), with `scrimp-win` tests against each
+- [x] VHDX test drives in CI (64 KB clusters, exFAT, ReFS, and NTFS with and without WOF attached), with `scrimp-win` tests against each
 
 ## Phase 2: Compression engine
 

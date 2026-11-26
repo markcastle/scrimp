@@ -10,52 +10,15 @@
 
 use std::fs;
 use std::os::windows::fs::OpenOptionsExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use scrimp_core::{Algorithm, CompressionState, UnsupportedReason};
 use scrimp_win::{DriveType, Error, compress, decompress, inspect, volume};
 
-const MB: usize = 1024 * 1024;
+mod common;
 
-/// Skips a test that needs something this computer may not have, but never
-/// on CI, where GitHub's runners have it and a skip would hide a failure.
-fn skip(why: &str) {
-    assert!(std::env::var_os("CI").is_none(), "this must run on CI, but {why}");
-    eprintln!("skipped: {why}");
-}
-
-/// Repetitive text that compresses well. Made up, as all examples are.
-fn text(len: usize) -> Vec<u8> {
-    let mut out = Vec::with_capacity(len + 100);
-    let mut i = 0u64;
-    while out.len() < len {
-        out.extend(format!("Row {i}: Example.dat moved to D:\\Archive on day {}.\n", i % 365).bytes());
-        i += 1;
-    }
-    out.truncate(len);
-    out
-}
-
-/// Bytes that won't compress.
-fn random(len: usize) -> Vec<u8> {
-    let mut x = 0x2545_F491_4F6C_DD1Du64;
-    let mut out = Vec::with_capacity(len + 8);
-    while out.len() < len {
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        out.extend_from_slice(&x.to_le_bytes());
-    }
-    out.truncate(len);
-    out
-}
-
-fn file(dir: &Path, name: &str, data: &[u8]) -> PathBuf {
-    let p = dir.join(name);
-    fs::write(&p, data).unwrap();
-    p
-}
+use common::{MB, file, random, skip, text};
 
 fn set_read_only(path: &Path, on: bool) {
     let mut perms = fs::metadata(path).unwrap().permissions();
