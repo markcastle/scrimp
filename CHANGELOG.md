@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added
+
+- **A software bill of materials with every release**: one for each program, listing every component in it with its version and licence, for anyone checking Scrimp against a security advisory.
+
 ### Changed
 
 - **Honest about virtual disks.** Compressing files on a mounted VHD or VHDX now says the space is saved inside the virtual disk, and that the VHDX file itself only gets smaller once it's compacted. Decompressing there says the file may grow. `--json` output has a new `virtualDisk` line.

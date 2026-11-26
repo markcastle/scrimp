@@ -708,26 +708,26 @@ The CLI on its own (`scrimp-windows-x64.exe`), as Keevoro publishes `keevoro-win
 
 ## 17. MVP definition of done
 
-- [ ] Native Rust, no managed runtime, no runtime DLLs beyond Windows
-- [ ] XPRESS4K, XPRESS8K, XPRESS16K, LZX and LZNT1 compression and decompression
-- [ ] Byte-for-byte integrity across every algorithm change in CI
-- [ ] Clear handling of unsupported volumes, including Dev Drives
-- [ ] Explorer menu on Windows 10 and in Windows 11's "Show more options" and Shift + right-click menus
-- [ ] Files, multiple selections, folders and drives
-- [ ] Current state and real savings reported
-- [ ] Native progress with cancel (pause supported by the scheduler, button after the MVP)
-- [ ] One worker per user with per-disk worker limits
-- [ ] Automatic mode with change-prone and already-compressed skipping
-- [ ] CLI with JSON output and documented exit codes
-- [ ] Mounted VHDX support with honest reporting
-- [ ] Explorer survives an injected panic in the shell extension
-- [ ] NSIS installer: per-user install, upgrade and clean uninstall, no administrator prompt
-- [ ] `install.ps1` one-line CLI install and `scrimp update`, both verifying `SHA256SUMS`
-- [ ] One user PATH entry, added and removed correctly; uninstall leaves PATH as it was
-- [ ] No background processes when idle; no network access except when the user runs `scrimp update`
-- [ ] Keevoro-style Release button, rollback workflow, checksums and SBOM
-- [ ] Coverage at or above 90% overall and 95% for compress, decompress, verify and state detection
-- [ ] Developer documentation: `docs/developing.md`, Windows API findings, command line, AI agent rules
+- [x] Native Rust, no managed runtime, no runtime DLLs beyond Windows: `cargo xtask imports` in CI and in releases
+- [x] XPRESS4K, XPRESS8K, XPRESS16K, LZX and LZNT1 compression and decompression: `crates/scrimp-win/tests/round_trip.rs`
+- [x] Byte-for-byte integrity across every algorithm change in CI: `every_change_between_methods_keeps_the_content_and_lands_exactly`
+- [x] Clear handling of unsupported volumes, including Dev Drives: `crates/scrimp-win/tests/volumes.rs` on CI's exFAT, FAT32, ReFS and 64 KB-cluster drives; Dev Drives called by name
+- [ ] Explorer menu on Windows 10 and in Windows 11's "Show more options" and Shift + right-click menus: built and tested through the shell's own interfaces (`crates/scrimp-shell/src/tests.rs`); waiting for a person to try it in Explorer (TASKS.md, Tried by a person, S6)
+- [ ] Files, multiple selections, folders and drives: tested through the shell's interfaces and the engine; waiting for a person to try them in Explorer (S6)
+- [x] Current state and real savings reported: `scrimp inspect`, `scrimp analyse` and Scrimp Savings…, from one analysis in `scrimp-core`
+- [x] Native progress with cancel (pause supported by the scheduler, button after the MVP): task dialogs, tested for real in `crates/scrimp-win/src/ui.rs`
+- [x] One worker per user with per-disk worker limits: `crates/scrimpw/tests/worker.rs` and the engine's scheduler tests
+- [x] Automatic mode with change-prone and already-compressed skipping: `crates/scrimp-core/src/policy.rs`
+- [x] CLI with JSON output and documented exit codes: [docs/command-line.md](command-line.md), `crates/scrimp-cli/tests/commands.rs`
+- [x] Mounted VHDX support with honest reporting: the summary says the VHDX file only shrinks once compacted, detected on CI's real mounted VHDX drives
+- [x] Explorer survives an injected panic in the shell extension: `a_panic_comes_back_as_an_error_and_never_reaches_explorer`
+- [x] NSIS installer: per-user install, upgrade and clean uninstall, no administrator prompt: `scripts/test-installer.ps1` in CI
+- [x] `install.ps1` one-line CLI install and `scrimp update`, both verifying `SHA256SUMS`: `crates/scrimp-update/src/tests.rs`
+- [x] One user PATH entry, added and removed correctly; uninstall leaves PATH as it was: `crates/scrimp-win/src/user_path.rs` tests and the installer test
+- [x] No background processes when idle; no network access except when the user runs `scrimp update`: the worker exits when its jobs are done (`every_waiting_job_is_run_then_the_worker_exits`); only `scrimp-update` has a network client
+- [x] Keevoro-style Release button, rollback workflow, checksums and SBOM: `.github/workflows/release.yml` and `rollback.yml`
+- [x] Coverage at or above 90% overall and 95% for compress, decompress, verify and state detection: CI's coverage job, with `cargo xtask coverage` for the 95%
+- [x] Developer documentation: `docs/developing.md`, Windows API findings, command line, AI agent rules
 
 ## 18. After 1.0
 
