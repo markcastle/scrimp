@@ -5,10 +5,10 @@ use std::process::ExitCode;
 use std::sync::{Mutex, PoisonError};
 
 use scrimp_core::{
-    Control, Event, Job, JobError, JobRequest, Mode, Outcome, Report, Settings, Target, format_count, format_size,
-    has_waiting, jobs_folder, take_next, worker_lock_name,
+    Control, Event, FailReason, Job, JobError, JobRequest, Mode, Outcome, Report, Settings, Target, admin_jobs_folder,
+    format_count, format_size, has_waiting, jobs_folder, take_next, worker_lock_name,
 };
-use scrimp_win::ui::{self, ProgressView};
+use scrimp_win::ui::{self, Button, Finish, ProgressView};
 use scrimp_win::{SingleInstance, WindowsDisk};
 
 use crate::Args;
@@ -161,7 +161,18 @@ fn run(job: Result<JobRequest, JobError>, args: &Args) {
     let decompressing = request.target == Target::Uncompressed;
     let doing = if decompressing { "Decompressing" } else { "Compressing" };
     let headline = format!("{doing} {name}");
+    let elevated = scrimp_win::is_elevated();
 
+    if !args.quiet {
+        if elevated && !confirm_as_administrator(&request, decompressing) {
+            return;
+        }
+        if !decompressing && !elevated && !first_use_agreed() {
+            return;
+        }
+    }
+
+    let target = request.target;
     let control = Control::new();
     let live = Mutex::new(Live::new(if decompressing {
         Mode::Decompress
@@ -212,7 +223,123 @@ fn run(job: Result<JobRequest, JobError>, args: &Args) {
         body.push("Stopped. Files already done keep their new size.".into());
     }
     let details = (!state.problems.is_empty()).then(|| state.problems.join("\n"));
-    say(args, &lines[0], &body.join("\n"), details.as_deref());
+    if args.quiet || elevated || state.denied.is_empty() {
+        return say(args, &lines[0], &body.join("\n"), details.as_deref());
+    }
+    let again = Button {
+        text: "Try Again as Administrator",
+        needs_admin: true,
+    };
+    if ui::ask(
+        TITLE,
+        &lines[0],
+        &body.join("\n"),
+        details.as_deref(),
+        &[again],
+        Finish::Close,
+    ) == Some(0)
+    {
+        try_again_as_administrator(target, state.denied);
+    }
+}
+
+/// Where the note that the first-use message was seen is kept.
+fn first_use_note() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA").map(|d| Path::new(&d).join("Scrimp").join("first-use-seen"))
+}
+
+/// The first time Scrimp compresses anything for this person, says what it
+/// does and how to undo it. Returns whether to go ahead.
+fn first_use_agreed() -> bool {
+    let Some(note) = first_use_note() else {
+        return true;
+    };
+    if note.exists() {
+        return true;
+    }
+    let go = ui::ask(
+        TITLE,
+        "Scrimp keeps your files exactly as they are, just smaller on disk",
+        "Apps open them as normal. Use Scrimp Decompress to undo it at any time.",
+        None,
+        &[Button {
+            text: "Continue",
+            needs_admin: false,
+        }],
+        Finish::Cancel,
+    ) == Some(0);
+    if go {
+        if let Some(folder) = note.parent() {
+            let _ = std::fs::create_dir_all(folder);
+        }
+        let _ = std::fs::write(&note, "");
+    }
+    go
+}
+
+/// Running as administrator, the job came from a folder the everyday user
+/// can write to, so the person is shown exactly what will change and asked.
+fn confirm_as_administrator(request: &JobRequest, decompressing: bool) -> bool {
+    let (body, details) = paths_to_confirm(&request.paths, decompressing);
+    ui::ask(
+        TITLE,
+        "Scrimp is running as administrator",
+        &body,
+        details.as_deref(),
+        &[Button {
+            text: "Continue",
+            needs_admin: false,
+        }],
+        Finish::Cancel,
+    ) == Some(0)
+}
+
+/// How many paths are listed before "and N more".
+const LISTED: usize = 10;
+
+/// The text asking to go ahead with `paths`, and the full list behind
+/// "Show details" when they don't all fit.
+fn paths_to_confirm(paths: &[PathBuf], decompressing: bool) -> (String, Option<String>) {
+    let verb = if decompressing { "decompress" } else { "compress" };
+    let mut body = format!("It will {verb} these, and nothing else:\n");
+    for p in paths.iter().take(LISTED) {
+        body.push_str(&format!("\n{}", p.display()));
+    }
+    let details = (paths.len() > LISTED).then(|| {
+        body.push_str(&format!("\n…and {} more", format_count((paths.len() - LISTED) as u64)));
+        paths
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
+    });
+    (body, details)
+}
+
+/// Hands the files Windows refused to a worker running as administrator.
+/// Windows asks the person first; if they say no, nothing is left behind.
+fn try_again_as_administrator(target: Target, paths: Vec<PathBuf>) {
+    let failed = |e: &dyn std::fmt::Display| {
+        ui::message(TITLE, "Scrimp couldn't start as administrator", &format!("{e}."), None)
+    };
+    let (Some(folder), Ok(exe)) = (admin_jobs_folder(), std::env::current_exe()) else {
+        return failed(&"Windows didn't say where Scrimp is");
+    };
+    let job = match (JobRequest { target, paths }).write_to(&folder) {
+        Ok(job) => job,
+        Err(e) => return failed(&e),
+    };
+    let folder_arg = folder.to_string_lossy();
+    match scrimp_win::run_as_administrator(&exe, &["--jobs-folder", &folder_arg]) {
+        Ok(true) => {}
+        Ok(false) => {
+            let _ = std::fs::remove_file(&job);
+        }
+        Err(e) => {
+            let _ = std::fs::remove_file(&job);
+            failed(&e);
+        }
+    }
 }
 
 /// What the progress dialog shows, kept up to date as files finish.
@@ -221,6 +348,8 @@ struct Live {
     files: u64,
     last: Option<String>,
     problems: Vec<String>,
+    /// What Windows refused to change, for Try Again as Administrator.
+    denied: Vec<PathBuf>,
     finished: bool,
 }
 
@@ -231,6 +360,7 @@ impl Live {
             files: 0,
             last: None,
             problems: Vec::new(),
+            denied: Vec::new(),
             finished: false,
         }
     }
@@ -243,9 +373,15 @@ impl Live {
                 self.last = path.file_name().map(|n| n.to_string_lossy().into_owned());
                 if let Outcome::Failed { reason, .. } = outcome {
                     self.problems.push(format!("Couldn't change {}: {}", path.display(), reason.plain()));
+                    if *reason == FailReason::AccessDenied {
+                        self.denied.push(path.clone());
+                    }
                 }
             }
-            Event::FolderUnreadable { path, .. } => {
+            Event::FolderUnreadable { path, reason } => {
+                if *reason == FailReason::AccessDenied {
+                    self.denied.push(path.clone());
+                }
                 self.problems.push(format!("Couldn't open {}, so the files in it were left alone.", path.display()));
             }
             Event::WofUnavailable { root } => self.problems.push(format!(
@@ -337,6 +473,37 @@ mod tests {
         });
         assert_eq!(live.problems.len(), 3);
         assert!(live.problems[0].contains("in use by another app"));
+        assert_eq!(
+            live.denied,
+            [PathBuf::from(r"D:\Games\Private")],
+            "only what Windows refused"
+        );
+        live.add(&Event::File {
+            path: PathBuf::from(r"D:\Games\locked.dat"),
+            outcome: Outcome::Failed {
+                reason: scrimp_core::FailReason::AccessDenied,
+                left_as: scrimp_core::CompressionState::Uncompressed,
+            },
+            on_disk: 0,
+        });
+        assert_eq!(live.denied.len(), 2);
+    }
+
+    #[test]
+    fn running_as_administrator_shows_what_will_change() {
+        let few = [PathBuf::from(r"D:\Games"), PathBuf::from(r"D:\Archive\2019.dat")];
+        let (body, details) = paths_to_confirm(&few, false);
+        assert_eq!(
+            body,
+            "It will compress these, and nothing else:\n\nD:\\Games\nD:\\Archive\\2019.dat"
+        );
+        assert_eq!(details, None);
+
+        let many: Vec<PathBuf> = (0..12).map(|i| PathBuf::from(format!(r"D:\f{i}"))).collect();
+        let (body, details) = paths_to_confirm(&many, true);
+        assert!(body.starts_with("It will decompress these"));
+        assert!(body.ends_with("D:\\f9\n…and 2 more"), "{body}");
+        assert_eq!(details.unwrap().lines().count(), 12);
     }
 
     #[test]

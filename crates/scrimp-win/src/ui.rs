@@ -8,10 +8,10 @@
 
 use windows::Win32::Foundation::{HWND, LPARAM, S_FALSE, S_OK, WPARAM};
 use windows::Win32::UI::Controls::{
-    TASKDIALOG_NOTIFICATIONS, TASKDIALOGCONFIG, TDCBF_CANCEL_BUTTON, TDCBF_CLOSE_BUTTON, TDE_CONTENT,
-    TDE_MAIN_INSTRUCTION, TDF_ALLOW_DIALOG_CANCELLATION, TDF_CALLBACK_TIMER, TDF_SHOW_MARQUEE_PROGRESS_BAR,
-    TDM_CLICK_BUTTON, TDM_SET_ELEMENT_TEXT, TDM_SET_PROGRESS_BAR_MARQUEE, TDN_BUTTON_CLICKED, TDN_CREATED, TDN_TIMER,
-    TaskDialogIndirect,
+    TASKDIALOG_BUTTON, TASKDIALOG_NOTIFICATIONS, TASKDIALOGCONFIG, TDCBF_CANCEL_BUTTON, TDCBF_CLOSE_BUTTON,
+    TDE_CONTENT, TDE_MAIN_INSTRUCTION, TDF_ALLOW_DIALOG_CANCELLATION, TDF_CALLBACK_TIMER,
+    TDF_SHOW_MARQUEE_PROGRESS_BAR, TDM_CLICK_BUTTON, TDM_SET_BUTTON_ELEVATION_REQUIRED_STATE, TDM_SET_ELEMENT_TEXT,
+    TDM_SET_PROGRESS_BAR_MARQUEE, TDN_BUTTON_CLICKED, TDN_CREATED, TDN_TIMER, TaskDialogIndirect,
 };
 use windows::Win32::UI::WindowsAndMessaging::SendMessageW;
 use windows::core::{HRESULT, PCWSTR};
@@ -136,19 +136,104 @@ pub fn progress(title: &str, poll: &mut dyn FnMut() -> ProgressView, cancel: &mu
     let _ = unsafe { TaskDialogIndirect(&config, None, None, None) };
 }
 
-/// Shows a message with a Close button, and optional details behind a
-/// "Show details" control.
-pub fn message(title: &str, headline: &str, body: &str, details: Option<&str>) {
+/// A button of a dialog's own, beside its Close or Cancel button.
+#[derive(Debug, Clone, Copy)]
+pub struct Button<'a> {
+    pub text: &'a str,
+    /// Shows Windows' shield on the button: pressing it asks for
+    /// administrator rights.
+    pub needs_admin: bool,
+}
+
+/// Which of Windows' own buttons a dialog ends with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Finish {
+    /// Close, which is also the default: for a dialog reporting what happened.
+    Close,
+    /// Cancel, with the dialog's first own button as the default: for a
+    /// dialog asking whether to go ahead.
+    Cancel,
+}
+
+/// The ID of the dialog's first own button. Windows' own use 1 to 8.
+const FIRST_BUTTON: i32 = 100;
+const IDCLOSE: i32 = 8;
+
+unsafe extern "system" fn ask_callback(
+    hwnd: HWND,
+    msg: TASKDIALOG_NOTIFICATIONS,
+    _wparam: WPARAM,
+    _lparam: LPARAM,
+    data: isize,
+) -> HRESULT {
+    std::panic::catch_unwind(|| {
+        if msg == TDN_CREATED {
+            // SAFETY: `data` is the slice of button IDs `ask` passed in and
+            // keeps alive until TaskDialogIndirect returns.
+            let shielded = unsafe { &*(data as *const Vec<i32>) };
+            for id in shielded {
+                // SAFETY: `hwnd` is the live dialog this callback is for.
+                unsafe {
+                    SendMessageW(
+                        hwnd,
+                        TDM_SET_BUTTON_ELEVATION_REQUIRED_STATE.0 as u32,
+                        Some(WPARAM(*id as usize)),
+                        Some(LPARAM(1)),
+                    )
+                };
+            }
+        }
+        S_OK
+    })
+    .unwrap_or(S_OK)
+}
+
+/// Shows a dialog with optional details behind "Show details", the given
+/// buttons of its own, and then Close or Cancel. Returns which of its own
+/// buttons was pressed, or `None` for Close, Cancel or Escape.
+pub fn ask(
+    title: &str,
+    headline: &str,
+    body: &str,
+    details: Option<&str>,
+    buttons: &[Button<'_>],
+    finish: Finish,
+) -> Option<usize> {
     let (title, headline, body) = (wide(title), wide(headline), wide(body));
     let details = details.map(wide);
     let (show, hide) = (wide("Show details"), wide("Hide details"));
+    let texts: Vec<Vec<u16>> = buttons.iter().map(|b| wide(b.text)).collect();
+    let own: Vec<TASKDIALOG_BUTTON> = texts
+        .iter()
+        .zip(FIRST_BUTTON..)
+        .map(|(text, id)| TASKDIALOG_BUTTON {
+            nButtonID: id,
+            pszButtonText: PCWSTR(text.as_ptr()),
+        })
+        .collect();
+    let shielded: Vec<i32> = buttons
+        .iter()
+        .zip(FIRST_BUTTON..)
+        .filter(|(b, _)| b.needs_admin)
+        .map(|(_, id)| id)
+        .collect();
+    let (common, default) = match finish {
+        Finish::Close => (TDCBF_CLOSE_BUTTON, IDCLOSE),
+        Finish::Cancel if own.is_empty() => (TDCBF_CANCEL_BUTTON, IDCANCEL as i32),
+        Finish::Cancel => (TDCBF_CANCEL_BUTTON, FIRST_BUTTON),
+    };
     let mut config = TASKDIALOGCONFIG {
         cbSize: size_of::<TASKDIALOGCONFIG>() as u32,
         dwFlags: TDF_ALLOW_DIALOG_CANCELLATION,
-        dwCommonButtons: TDCBF_CLOSE_BUTTON,
+        dwCommonButtons: common,
         pszWindowTitle: PCWSTR(title.as_ptr()),
         pszMainInstruction: PCWSTR(headline.as_ptr()),
         pszContent: PCWSTR(body.as_ptr()),
+        cButtons: own.len() as u32,
+        pButtons: own.as_ptr(),
+        nDefaultButton: default,
+        pfCallback: Some(ask_callback),
+        lpCallbackData: &shielded as *const Vec<i32> as isize,
         ..Default::default()
     };
     if let Some(d) = &details {
@@ -156,6 +241,16 @@ pub fn message(title: &str, headline: &str, body: &str, details: Option<&str>) {
         config.pszCollapsedControlText = PCWSTR(show.as_ptr());
         config.pszExpandedControlText = PCWSTR(hide.as_ptr());
     }
-    // SAFETY: `config` and every string it points to live until this call returns.
-    let _ = unsafe { TaskDialogIndirect(&config, None, None, None) };
+    let mut pressed = 0i32;
+    // SAFETY: `config` and everything it points to (strings, buttons and
+    // the callback's `shielded`) live until this call returns.
+    unsafe { TaskDialogIndirect(&config, Some(&mut pressed), None, None) }.ok()?;
+    let index = usize::try_from(pressed.checked_sub(FIRST_BUTTON)?).ok()?;
+    (index < buttons.len()).then_some(index)
+}
+
+/// Shows a message with a Close button, and optional details behind a
+/// "Show details" control.
+pub fn message(title: &str, headline: &str, body: &str, details: Option<&str>) {
+    ask(title, headline, body, details, &[], Finish::Close);
 }

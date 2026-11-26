@@ -32,6 +32,8 @@ pub use error::Error;
 #[cfg(windows)]
 mod disk;
 #[cfg(windows)]
+mod elevation;
+#[cfg(windows)]
 mod ffi;
 #[cfg(windows)]
 mod file;
@@ -52,6 +54,8 @@ mod volume;
 
 #[cfg(windows)]
 pub use disk::WindowsDisk;
+#[cfg(windows)]
+pub use elevation::{is_elevated, run_as_administrator};
 #[cfg(windows)]
 pub use file::{FileInfo, compress, decompress, inspect};
 #[cfg(windows)]

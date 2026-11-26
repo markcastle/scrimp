@@ -115,6 +115,15 @@ pub fn jobs_folder() -> Option<PathBuf> {
     std::env::var_os("LOCALAPPDATA").map(|d| Path::new(&d).join("Scrimp").join("jobs"))
 }
 
+/// `%LOCALAPPDATA%\Scrimp\admin-jobs`: jobs for a worker running as
+/// administrator, made by **Try Again as Administrator**. It has its own
+/// folder, and so its own lock, so it never takes the everyday worker's jobs.
+/// The everyday user can write here, so that worker shows the paths it was
+/// given and asks before it changes anything.
+pub fn admin_jobs_folder() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA").map(|d| Path::new(&d).join("Scrimp").join("admin-jobs"))
+}
+
 /// The name of the lock that makes one worker at a time take jobs from
 /// `folder`. It lives in the session's `Local\` namespace, so it is the
 /// user's own.
@@ -376,6 +385,14 @@ mod tests {
         assert_eq!(names.len(), 1000);
         if let Some(folder) = jobs_folder() {
             assert!(folder.ends_with(Path::new("Scrimp").join("jobs")));
+        }
+        if let (Some(everyday), Some(admin)) = (jobs_folder(), admin_jobs_folder()) {
+            assert_eq!(everyday.parent(), admin.parent());
+            assert_ne!(
+                worker_lock_name(&everyday),
+                worker_lock_name(&admin),
+                "separate workers"
+            );
         }
     }
 }
