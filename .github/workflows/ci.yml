@@ -77,6 +77,13 @@ jobs:
         run: ./scripts/test-volumes.ps1
       - name: Coverage (fails under 90% of lines)
         run: cargo llvm-cov --workspace --locked --fail-under-lines 90 --summary-only
+      # The code that compresses, decompresses, verifies and reads a file's
+      # state is held to 95%, file by file. On a shortfall it lists the lines
+      # no test runs.
+      - name: Code that changes files (fails under 95% of lines)
+        run: |
+          cargo llvm-cov report --lcov --output-path lcov.info
+          cargo xtask coverage lcov.info
 
   # Licences every dependency is under, and known security advisories.
   deny:
@@ -101,6 +108,9 @@ jobs:
         with:
           key: installer
       - run: scripts/build-installer.sh
+      # No Visual C++ redistributable or other runtime: only Windows' own DLLs.
+      - name: Check it needs nothing but Windows
+        run: cargo xtask imports target/release/scrimp.exe target/release/scrimpw.exe target/release/scrimp_shell.dll
       - name: Install, reinstall and uninstall
         shell: pwsh
         run: ./scripts/test-installer.ps1 installers/Scrimp-windows-x64-setup.exe

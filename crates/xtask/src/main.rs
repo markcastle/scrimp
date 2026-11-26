@@ -8,6 +8,8 @@
 //! cargo xtask changelog next 0.2.0        print what should follow 0.2.0
 //! cargo xtask changelog release 0.3.0     turn Unreleased into 0.3.0, dated today
 //! cargo xtask changelog note "text"       add a line under Unreleased's Changed
+//! cargo xtask coverage lcov.info          hold the code that changes files to 95%
+//! cargo xtask imports scrimp.exe ...      check programs need nothing but Windows
 //! ```
 //!
 //! Ported from Keevoro, so both projects release the same way. It is Rust
@@ -20,6 +22,8 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 mod changelog;
+mod coverage;
+mod imports;
 
 use anyhow::{Context, Result, bail};
 use std::path::Path;
@@ -35,7 +39,9 @@ const USAGE: &str = "Usage:
   cargo xtask changelog section <version>
   cargo xtask changelog next <current version>
   cargo xtask changelog release <version>
-  cargo xtask changelog note \"what changed\"";
+  cargo xtask changelog note \"what changed\"
+  cargo xtask coverage <lcov.info>
+  cargo xtask imports <program>...";
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -73,6 +79,22 @@ fn run(args: &[&str], root: &Path) -> Result<()> {
         ["changelog", "note", line] if !line.trim().is_empty() => {
             write(CHANGELOG, changelog::note(&read(CHANGELOG)?, line.trim())?)?;
             eprintln!("CHANGELOG.md: noted under Unreleased.");
+        }
+        ["coverage", lcov] => {
+            let text = std::fs::read_to_string(lcov).with_context(|| format!("Couldn't read {lcov}"))?;
+            coverage::check(&text)?.iter().for_each(|l| println!("{l}"));
+        }
+        ["imports", files @ ..] if !files.is_empty() => {
+            let files = files
+                .iter()
+                .map(|f| {
+                    Ok((
+                        f.to_string(),
+                        std::fs::read(f).with_context(|| format!("Couldn't read {f}"))?,
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            imports::check(&files)?.iter().for_each(|l| println!("{l}"));
         }
         ["release"] => cut_release(root, None)?,
         ["release", version] => cut_release(root, Some(version))?,
