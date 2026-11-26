@@ -97,6 +97,31 @@ pub fn open(path: &Path, access: u32, flags: u32) -> WinResult<Handle> {
     Ok(Handle(h))
 }
 
+/// Opens without FILE_FLAG_BACKUP_SEMANTICS, to rule that flag out.
+pub fn open_plain(path: &Path, access: u32) -> WinResult<Handle> {
+    let w = wide(path);
+    // SAFETY: as in `open`.
+    let h = unsafe {
+        CreateFileW(
+            PCWSTR(w.as_ptr()),
+            access,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            None,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            None,
+        )
+    }?;
+    Ok(Handle(h))
+}
+
+/// The WOF driver's version for a provider on this file's volume. Fails
+/// when that provider isn't available there.
+pub fn wof_driver_version(h: &Handle, provider: u32) -> WinResult<u32> {
+    // SAFETY: the handle is open.
+    Ok(unsafe { WofGetDriverVersion(h.0, provider) }?)
+}
+
 /// Opens a file with a chosen share mode, to test what compression does
 /// while another program has it open.
 pub fn open_shared(path: &Path, access: u32, share: u32) -> WinResult<Handle> {

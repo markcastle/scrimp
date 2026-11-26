@@ -68,31 +68,53 @@ jobs:
             Write-Host "::warning::Could not make the SMB share: $_"
           }
 
-      - name: Run the probe
+      # First run: the runner's own C: drive, where Windows itself already
+      # uses WOF, as a baseline.
+      - name: 'Run the probe on C: drive'
         shell: pwsh
         run: |
-          $probe = 'spikes\wof-probe\target\release\wof-probe.exe'
-          & $probe report.md --main 'N:\probe' `
-            --volume 'Runner C: drive=C:\' `
+          New-Item -ItemType Directory -Force -Path 'C:\probe-main' | Out-Null
+          & spikes\wof-probe\target\release\wof-probe.exe report-c.md --main 'C:\probe-main' `
+            --volume 'Runner C: drive=C:\'
+
+      # The WOF filter driver may not attach itself to a volume mounted
+      # after boot. Attach it to each test volume and log what changed.
+      - name: Attach WOF to the test volumes
+        shell: pwsh
+        run: |
+          fltmc instances -f wof | Out-String | Write-Host
+          foreach ($l in 'N','L','X','R') {
+            Write-Host "fltmc attach wof $($l):"
+            fltmc attach wof "$($l):" | Out-String | Write-Host
+          }
+          fltmc instances -f wof | Out-String | Write-Host
+
+      - name: Run the probe on the test volumes
+        shell: pwsh
+        run: |
+          & spikes\wof-probe\target\release\wof-probe.exe report.md --main 'N:\probe' `
             --volume 'NTFS 4 KB clusters=N:\' `
             --volume 'NTFS 64 KB clusters=L:\' `
             --volume 'exFAT=X:\' `
             --volume 'ReFS=R:\' `
             --smb '\\localhost\scrimpprobe'
-          Get-Content report.md | Add-Content $env:GITHUB_STEP_SUMMARY
+          Get-Content report-c.md, report.md | Add-Content $env:GITHUB_STEP_SUMMARY
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: probe-report
-          path: report.md
+          path: report*.md
           if-no-files-found: ignore
 
-      - name: Post the report on the pull request
-        if: github.event_name == 'pull_request'
+      - name: Post the reports on the pull request
+        if: always() && github.event_name == 'pull_request'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          head -c 65000 report.md > comment.md
-          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body-file comment.md
+          for f in report-c.md report.md; do
+            [ -f "$f" ] || continue
+            head -c 65000 "$f" > comment.md
+            gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body-file comment.md
+          done

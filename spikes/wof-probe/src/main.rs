@@ -64,6 +64,9 @@ fn main() {
     let _ = writeln!(r, "Windows: `{}`\n", run_text("cmd", &["/c", "ver"]).trim());
     let _ = writeln!(r, "Main test folder: `{}`\n", main_dir.display());
 
+    section(&mut r, "S0: does WOF work on this volume at all?", || {
+        s0_diagnose(&main_dir)
+    });
     section(
         &mut r,
         "S1a: compress with each method, through wofutil.dll and through FSCTL",
@@ -260,6 +263,71 @@ fn apply(path: &Path, to: &str) -> WinResult<()> {
         "LZNT1" => ntfs_set(&h, 2),
         alg => wof_set_api(&h, wof_id(alg), 0),
     }
+}
+
+// ---------------------------------------------------------------- S0
+
+fn s0_diagnose(dir: &Path) -> String {
+    let data = text_data(8 * MB);
+    let mut out = String::new();
+
+    let p = fresh(dir, "s0-compact.txt", &data);
+    let said = run_text("compact", &["/c", "/exe:lzx", &p.to_string_lossy()]);
+    let _ = writeln!(
+        out,
+        "**compact.exe /c /exe:lzx** on 8 MiB of text. State after: {}. GetCompressedFileSize: {}. It said:\n\n```text\n{}\n```\n",
+        describe_state(&p),
+        size_text(compressed_size(&p)),
+        said.trim()
+    );
+
+    let p = fresh(dir, "s0-version.txt", &data);
+    let version = open(&p, GENERIC_READ, 0).and_then(|h| wof_driver_version(&h, WOF_PROVIDER_FILE));
+    let wim = open(&p, GENERIC_READ, 0).and_then(|h| wof_driver_version(&h, 1));
+    let _ = writeln!(
+        out,
+        "**WofGetDriverVersion** on a file here: file provider {}, WIM provider {}.\n",
+        version.map_or_else(|e| e.to_string(), |v| format!("0x{v:X}")),
+        wim.map_or_else(|e| e.to_string(), |v| format!("0x{v:X}"))
+    );
+
+    out.push_str("**Our call, opened different ways** (LZX):\n\n| Open | Access | wofutil | FSCTL |\n| --- | --- | --- | --- |\n");
+    let ways: [(&str, bool, &str, u32); 4] = [
+        ("backup semantics", true, "GENERIC_READ + GENERIC_WRITE", RW),
+        ("plain", false, "GENERIC_READ + GENERIC_WRITE", RW),
+        ("plain", false, "GENERIC_READ", GENERIC_READ),
+        ("plain", false, "READ_DATA", READ_DATA | SYNCHRONIZE),
+    ];
+    for (how, backup, access_name, access) in ways {
+        let mut cells = Vec::new();
+        for route in ["wofutil", "FSCTL"] {
+            let p = fresh(dir, "s0-call.txt", &data);
+            let h = if backup {
+                open(&p, access, 0)
+            } else {
+                open_plain(&p, access)
+            };
+            let r = h.and_then(|h| {
+                if route == "wofutil" {
+                    wof_set_api(&h, wof_id("LZX"), 0)
+                } else {
+                    wof_set_fsctl(&h, wof_id("LZX"))
+                }
+            });
+            cells.push(format!("{} ({})", show(&r), describe_state(&p)));
+        }
+        let _ = writeln!(
+            out,
+            "| {how} | {access_name} | {} |",
+            cells.iter().map(cell).collect::<Vec<_>>().join(" | ")
+        );
+    }
+    let _ = writeln!(
+        out,
+        "\n`fltmc instances -f wof`:\n\n```text\n{}\n```",
+        run_text("fltmc", &["instances", "-f", "wof"]).trim()
+    );
+    out
 }
 
 // ---------------------------------------------------------------- S1
