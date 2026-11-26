@@ -89,6 +89,9 @@ pub struct VolumeFacts {
     pub no_wof: Option<UnsupportedReason>,
     /// Why NTFS compression can't be used here, if it can't.
     pub no_ntfs: Option<UnsupportedReason>,
+    /// A disk kept in a file, such as a mounted VHDX. Space saved inside it
+    /// doesn't make the file itself smaller until it is compacted.
+    pub virtual_disk: bool,
 }
 
 impl VolumeFacts {
@@ -229,6 +232,9 @@ pub enum Event {
     /// Windows' compression driver isn't running on this drive. Sent once
     /// per drive; WOF isn't tried there again in this job.
     WofUnavailable { root: PathBuf },
+    /// This drive is a disk kept in a file, such as a mounted VHDX. Sent
+    /// once per drive, before its files.
+    VirtualDisk { root: PathBuf },
 }
 
 struct Drive {
@@ -304,6 +310,7 @@ pub fn run<D: Disk>(
                 Event::File { outcome, on_disk, .. } => report.add(outcome, *on_disk),
                 Event::FolderUnreadable { .. } => report.add_unreadable_folder(),
                 Event::WofUnavailable { .. } => {}
+                Event::VirtualDisk { .. } => report.add_virtual_disk(),
             }
             on_event(&event);
         }
@@ -380,6 +387,11 @@ fn walk_root<D: Disk>(
     let (queue, drive) = queues
         .entry(facts.root.clone())
         .or_insert_with(|| {
+            if facts.virtual_disk {
+                let _ = events.send(Event::VirtualDisk {
+                    root: facts.root.clone(),
+                });
+            }
             let drive = Arc::new(Drive {
                 facts,
                 wof_unavailable: AtomicBool::new(false),

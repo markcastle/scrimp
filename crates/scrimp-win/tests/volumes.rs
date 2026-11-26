@@ -30,6 +30,9 @@ fn a_mounted_vhdx_with_wof_attached_works_like_any_ntfs_drive() {
         ("NTFS", 4096, DriveType::Fixed),
         "{v:?}"
     );
+    assert!(v.virtual_disk, "a mounted VHDX is a disk kept in a file: {v:?}");
+    let system = volume(std::path::Path::new(&std::env::var("SystemDrive").unwrap())).unwrap();
+    assert!(!system.virtual_disk, "the system drive isn't: {system:?}");
 
     let data = text(2 * MB);
     for algorithm in Algorithm::ALL {

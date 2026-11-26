@@ -53,6 +53,7 @@ fn volume(root: &str, storage: Storage) -> VolumeFacts {
         size: 100 * GIB,
         no_wof: None,
         no_ntfs: None,
+        virtual_disk: false,
     }
 }
 
@@ -421,6 +422,7 @@ fn a_drive_that_cant_compress_is_never_asked_to() {
         VolumeFacts {
             no_wof: Some(exfat.clone()),
             no_ntfs: Some(exfat.clone()),
+            virtual_disk: false,
             ..volume("X:", Storage::Removable)
         },
         GIB,
@@ -737,4 +739,42 @@ fn savings_say_plainly_when_nothing_is_compressed_or_there_is_nothing() {
     let (headline, body) = a.savings("Empty");
     assert_eq!(headline, "Empty has no files Scrimp can look at");
     assert!(body.is_empty());
+}
+
+#[test]
+fn a_virtual_disk_is_named_once_and_the_summary_is_honest_about_its_file() {
+    let mut disk = FakeDisk::new();
+    disk.add_volume(
+        VolumeFacts {
+            virtual_disk: true,
+            ..volume("V:", Storage::Unknown)
+        },
+        50 * GIB,
+    );
+    disk.file("V:/Data/a.txt", 100_000);
+    disk.file("V:/Data/b.txt", 100_000);
+    disk.file("D:/Games/c.txt", 100_000);
+    let (_, events, report) = simple(&disk, &["V:/Data", "D:/Games"], Target::Automatic);
+    let named: Vec<_> = events
+        .iter()
+        .filter(|e| matches!(e, Event::VirtualDisk { .. }))
+        .collect();
+    assert_eq!(named, [&Event::VirtualDisk { root: "V:".into() }]);
+    let summary = report.summary(None);
+    assert!(
+        summary
+            .iter()
+            .any(|l| l.contains("only gets smaller once it's compacted")),
+        "{summary:?}"
+    );
+
+    let (_, _, report) = simple(&disk, &["V:/Data"], Target::Uncompressed);
+    assert!(report.summary(None).iter().any(|l| l.contains("may grow")));
+
+    // Nothing changed: nothing to say about the VHDX file.
+    let (_, _, report) = simple(&disk, &["V:/Data"], Target::Uncompressed);
+    assert!(!report.summary(None).iter().any(|l| l.contains("VHDX")));
+
+    let (_, events, _) = simple(&disk, &["D:/Games"], Target::Automatic);
+    assert!(!events.iter().any(|e| matches!(e, Event::VirtualDisk { .. })));
 }

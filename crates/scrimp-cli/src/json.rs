@@ -70,6 +70,7 @@ pub fn event(event: &Event) -> Value {
             json!({ "path": path_text(path), "reason": fail_name(reason) }),
         ),
         Event::WofUnavailable { root } => object("wofUnavailable", json!({ "drive": path_text(root) })),
+        Event::VirtualDisk { root } => object("virtualDisk", json!({ "drive": path_text(root) })),
     }
 }
 
@@ -123,6 +124,9 @@ mod tests {
             event(&Event::WofUnavailable {
                 root: PathBuf::from(r"W:\"),
             }),
+            event(&Event::VirtualDisk {
+                root: PathBuf::from(r"V:\"),
+            }),
             event(&Event::FolderUnreadable {
                 path: PathBuf::from(r"D:\Games\Private"),
                 reason: FailReason::AccessDenied,
@@ -137,7 +141,11 @@ mod tests {
             assert!(!line.to_string().contains('\n'), "one object per line");
         }
         assert_eq!(lines[1]["drive"], json!(r"W:\"));
-        assert_eq!(lines[2]["reason"], json!("accessDenied"));
+        assert_eq!(
+            (lines[2]["type"].as_str(), &lines[2]["drive"]),
+            (Some("virtualDisk"), &json!(r"V:\"))
+        );
+        assert_eq!(lines[3]["reason"], json!("accessDenied"));
     }
 
     #[test]
