@@ -611,25 +611,20 @@ For development, `cargo xtask dev-cert` creates a self-signed certificate and in
 
 ## 14. Settings
 
-`%LOCALAPPDATA%\Scrimp\settings.json`, validated on load and written atomically (write to a temporary file, then `ReplaceFileW`).
+`%LOCALAPPDATA%\Scrimp\settings.json`, read and checked by `scrimp-core::settings`. Every setting is optional; a missing file means the defaults.
 
 ```json
 {
   "schemaVersion": 1,
-  "defaultTarget": "auto",
+  "defaultMethod": "auto",
   "minimumFileSizeBytes": 8192,
-  "skipChangeProneFiles": true,
-  "changeProneFallback": "skip",
-  "storageAwareConcurrency": true,
-  "workers": { "hdd": 1, "usb": 1, "sataSsd": 4, "nvme": 8, "unknown": 1 },
-  "followSymbolicLinks": false,
-  "allowNetworkDrives": false,
-  "protectSystemDirectories": true,
-  "verifyAfterCompress": false,
-  "showCompletionDialog": true,
-  "policyOverrides": { ".bak": "lzx" }
+  "filesThatChangeOften": "skip",
+  "workers": { "hdd": 1, "ssd": 4, "removable": 1, "unknown": 1 },
+  "extensions": { "bak": "lzx", "dat": "skip" }
 }
 ```
+
+Settings a newer Scrimp added are ignored, so going back to an older version never stops Scrimp starting. A file with a newer `schemaVersion` is refused. A mistake is reported in plain words naming the setting. Writing the file (atomically, keeping settings this version doesn't know) comes with the settings dialog after the MVP.
 
 There is no `checkForUpdates` setting. Scrimp never checks for updates in the background; `scrimp update` checks when the user runs it.
 
