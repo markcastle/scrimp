@@ -12,7 +12,6 @@ Work top to bottom. Each task is done when its tests pass, clippy is clean and c
 - [x] `install.ps1` that adds Scrimp to the user's PATH correctly
 - [x] `scrimp-core` types: algorithms, targets, states and outcomes
 - [x] `scrimp --version`
-- [ ] A rehearsal run of the Release workflow passes (Actions → Release → tick Rehearse)
 
 ### Phase 0 questions, answered on GitHub's Windows runners where possible
 
@@ -52,11 +51,12 @@ Each of these follows [docs/windows-api.md](docs/windows-api.md).
 
 ## Phase 3: Command line, released as 0.1
 
-- [ ] Settings file: `settings.json` read and validated, feeding the policy and worker limits
+- [x] Settings file: `settings.json` read and validated, feeding the policy and worker limits (`scrimp-core::settings`)
 
 - [ ] `scrimp compress`, `decompress`, `inspect` and `analyse`
 - [ ] `--json` output and documented exit codes
 - [ ] Benchmark against `compact.exe`
+- [ ] A rehearsal run of the Release workflow passes (Actions → Release → tick Rehearse)
 - [ ] First release with the Release button
 
 ## Phase 4: Explorer menu, released as 0.2
