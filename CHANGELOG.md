@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ### Changed
 
 - **Honest about virtual disks.** Compressing files on a mounted VHD or VHDX now says the space is saved inside the virtual disk, and that the VHDX file itself only gets smaller once it's compacted. Decompressing there says the file may grow. `--json` output has a new `virtualDisk` line.
+- **Dev Drives are called Dev Drives.** Files on one are reported as "on a Dev Drive. Dev Drives can't save space this way." rather than as being on a ReFS drive.
 
 ## [0.2.0] - 2026-11-26
 

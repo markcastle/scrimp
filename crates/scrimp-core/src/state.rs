@@ -45,10 +45,18 @@ pub enum UnsupportedReason {
     WofNotRunning,
 }
 
+/// ReFS, which is what a Dev Drive is. People know it as a Dev Drive.
+pub(crate) fn is_refs(filesystem: &str) -> bool {
+    filesystem.eq_ignore_ascii_case("ReFS")
+}
+
 impl UnsupportedReason {
     /// Why, in plain words, to follow "left alone, because ".
     pub fn plain(&self) -> String {
         match self {
+            UnsupportedReason::FileSystem(fs) if is_refs(fs) => {
+                "it's on a Dev Drive or another ReFS drive, and those can't save space this way".into()
+            }
             UnsupportedReason::FileSystem(fs) => format!("it's on a {fs} drive, which can't save space this way"),
             UnsupportedReason::ClusterTooLarge => "its drive can't use NTFS compression".into(),
             UnsupportedReason::NetworkLocation => "it's on a network location".into(),
