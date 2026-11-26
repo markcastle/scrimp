@@ -2,8 +2,8 @@ name: Phase 0 probe
 
 # Runs spikes/wof-probe on a real Windows machine against small test
 # volumes, and posts what Windows did as a comment on the pull request.
-# Findings are written up in docs/windows-api.md. Throwaway: this workflow
-# goes once Phase 0 is answered.
+# Findings are written up in docs/windows-api.md. It runs only when the
+# probe changes, so it can be re-run whenever a question needs re-checking.
 
 on:
   pull_request:
