@@ -45,6 +45,24 @@ pub enum UnsupportedReason {
     WofNotRunning,
 }
 
+impl UnsupportedReason {
+    /// Why, in plain words, to follow "left alone, because ".
+    pub fn plain(&self) -> String {
+        match self {
+            UnsupportedReason::FileSystem(fs) => format!("it's on a {fs} drive, which can't save space this way"),
+            UnsupportedReason::ClusterTooLarge => "its drive can't use NTFS compression".into(),
+            UnsupportedReason::NetworkLocation => "it's on a network location".into(),
+            UnsupportedReason::Encrypted => "it's encrypted".into(),
+            UnsupportedReason::CloudPlaceholder => "it's a cloud file, and compressing it could download it".into(),
+            UnsupportedReason::Link => "it's a link, and Scrimp never follows links".into(),
+            UnsupportedReason::SpecialFile => "it's a special file Windows manages itself".into(),
+            UnsupportedReason::WofNotRunning => {
+                "Windows' compression driver isn't running on its drive (NTFS compression still works there)".into()
+            }
+        }
+    }
+}
+
 impl CompressionState {
     /// Whether Scrimp may change this file at all.
     pub fn can_change(&self) -> bool {

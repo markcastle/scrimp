@@ -5,8 +5,9 @@ use std::process::ExitCode;
 use std::sync::{Mutex, PoisonError};
 
 use scrimp_core::{
-    Action, Control, Event, FailReason, Job, JobError, JobRequest, Mode, Outcome, Report, Settings, Target,
-    admin_jobs_folder, format_count, format_size, has_waiting, jobs_folder, take_next, worker_lock_name,
+    Action, CSV_HEADER, Control, Event, FailReason, Job, JobError, JobRequest, Mode, Outcome, Report, Settings, Target,
+    admin_jobs_folder, csv_folder_row, csv_row, format_count, format_size, has_waiting, jobs_folder, take_next,
+    worker_lock_name,
 };
 use scrimp_win::ui::{self, Button, Finish, ProgressView};
 
@@ -166,6 +167,8 @@ pub(crate) trait Screen {
     fn elevated(&self) -> bool;
     /// Starts `program` as administrator; `Ok(false)` if the person said no.
     fn run_as_administrator(&self, program: &Path, args: &[&str]) -> Result<bool, String>;
+    /// Asks where to save a report first named `name`; `None` if cancelled.
+    fn save_as(&self, name: &str) -> Option<PathBuf>;
 }
 
 /// The real thing: Windows' dialogs and Windows' administrator prompt.
@@ -190,6 +193,9 @@ impl Screen for Dialogs {
     }
     fn run_as_administrator(&self, program: &Path, args: &[&str]) -> Result<bool, String> {
         scrimp_win::run_as_administrator(program, args).map_err(|e| e.to_string())
+    }
+    fn save_as(&self, name: &str) -> Option<PathBuf> {
+        ui::save_csv("Save Scrimp's report", name)
     }
 }
 
@@ -244,6 +250,9 @@ impl Screen for Quiet {
     fn run_as_administrator(&self, _: &Path, _: &[&str]) -> Result<bool, String> {
         Ok(false)
     }
+    fn save_as(&self, _: &str) -> Option<PathBuf> {
+        None
+    }
 }
 
 /// Runs one job, showing it on `screen`. `quiet` skips every question, so
@@ -281,11 +290,15 @@ pub(crate) fn run_on(job: Result<JobRequest, JobError>, screen: &dyn Screen, pla
     }
 
     let control = Control::new();
-    let live = Mutex::new(Live::new(if decompressing {
+    let mut fresh = Live::new(if decompressing {
         Mode::Decompress
     } else {
         Mode::Compress
-    }));
+    });
+    if !quiet {
+        fresh.rows = Rows::create();
+    }
+    let live = Mutex::new(fresh);
     let job = Job {
         paths: request.paths,
         target,
@@ -319,21 +332,76 @@ pub(crate) fn run_on(job: Result<JobRequest, JobError>, screen: &dyn Screen, pla
             "Scrimp stopped unexpectedly. No file was left half-changed.",
         );
     };
-    let state = live.into_inner().unwrap_or_else(PoisonError::into_inner);
+    let mut state = live.into_inner().unwrap_or_else(PoisonError::into_inner);
     let lines = report.summary(Some(&name));
     let mut body: Vec<String> = lines.iter().skip(1).cloned().collect();
     if control.is_cancelled() {
         body.push("Stopped. Files already done keep their new size.".into());
     }
     let details = (!state.problems.is_empty()).then(|| state.problems.join("\n"));
-    let offer = !quiet && !elevated && !state.denied.is_empty();
-    let again = Button {
-        text: "Try Again as Administrator",
-        needs_admin: true,
+    let offer_again = !quiet && !elevated && !state.denied.is_empty();
+    let report_file = state.rows.as_mut().and_then(Rows::finish).map(Path::to_path_buf);
+    let mut saved = false;
+    loop {
+        let mut buttons = Vec::new();
+        if report_file.is_some() && !saved {
+            buttons.push(Button {
+                text: "Save Report…",
+                needs_admin: false,
+            });
+        }
+        if offer_again {
+            buttons.push(Button {
+                text: "Try Again as Administrator",
+                needs_admin: true,
+            });
+        }
+        let Some(pressed) = screen.ask(&lines[0], &body.join("\n"), details.as_deref(), &buttons, Finish::Close) else {
+            return;
+        };
+        match (buttons.get(pressed).map(|b| b.text), &report_file) {
+            (Some("Save Report…"), Some(file)) => {
+                saved = save_report(screen, file, &name);
+            }
+            (Some("Try Again as Administrator"), _) => {
+                return try_again_as_administrator(screen, places.admin_jobs.as_deref(), target, state.denied);
+            }
+            _ => return,
+        }
+    }
+}
+
+/// Asks where to save the report and copies it there. Returns whether it
+/// was saved; the summary shows again either way.
+fn save_report(screen: &dyn Screen, file: &Path, name: &str) -> bool {
+    let Some(place) = screen.save_as(&report_name(name)) else {
+        return false;
     };
-    let buttons: &[Button<'_>] = if offer { &[again] } else { &[] };
-    if screen.ask(&lines[0], &body.join("\n"), details.as_deref(), buttons, Finish::Close) == Some(0) && offer {
-        try_again_as_administrator(screen, places.admin_jobs.as_deref(), target, state.denied);
+    match std::fs::copy(file, &place) {
+        Ok(_) => true,
+        Err(e) => {
+            screen.ask(
+                "The report couldn't be saved",
+                &format!("{e}. Try somewhere else, such as Documents."),
+                None,
+                &[],
+                Finish::Close,
+            );
+            false
+        }
+    }
+}
+
+/// The report's first name: "Scrimp report - Games.csv", with anything a
+/// file name can't hold taken out.
+fn report_name(name: &str) -> String {
+    let clean: String = name
+        .chars()
+        .filter(|c| !matches!(c, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+        .collect();
+    match clean.trim() {
+        "" => "Scrimp report.csv".into(),
+        clean => format!("Scrimp report - {clean}.csv"),
     }
 }
 
@@ -512,7 +580,54 @@ struct Live {
     problems: Vec<String>,
     /// What Windows refused to change, for Try Again as Administrator.
     denied: Vec<PathBuf>,
+    /// A row per file, written as each finishes, for Save Report….
+    rows: Option<Rows>,
     finished: bool,
+}
+
+/// The report's rows, kept in a temporary file rather than in memory, so a
+/// job of a million files costs nothing extra. Removed when dropped.
+struct Rows {
+    path: PathBuf,
+    out: Option<std::io::BufWriter<std::fs::File>>,
+}
+
+impl Rows {
+    fn create() -> Option<Rows> {
+        use std::io::Write;
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        let path = std::env::temp_dir().join(format!("Scrimp report {}-{nanos}.csv", std::process::id()));
+        let mut out = std::io::BufWriter::new(std::fs::File::create(&path).ok()?);
+        out.write_all(CSV_HEADER.as_bytes()).ok()?;
+        Some(Rows { path, out: Some(out) })
+    }
+
+    fn write(&mut self, row: &str) {
+        use std::io::Write;
+        // A row that can't be written spoils the report, so it's dropped.
+        if let Some(out) = &mut self.out
+            && out.write_all(row.as_bytes()).is_err()
+        {
+            self.out = None;
+        }
+    }
+
+    /// Finishes the file, returning where it is if every row was written.
+    fn finish(&mut self) -> Option<&Path> {
+        use std::io::Write;
+        let mut out = self.out.take()?;
+        out.flush().ok()?;
+        Some(&self.path)
+    }
+}
+
+impl Drop for Rows {
+    fn drop(&mut self) {
+        self.out = None;
+        let _ = std::fs::remove_file(&self.path);
+    }
 }
 
 impl Live {
@@ -523,6 +638,7 @@ impl Live {
             last: None,
             problems: Vec::new(),
             denied: Vec::new(),
+            rows: None,
             finished: false,
         }
     }
@@ -532,6 +648,9 @@ impl Live {
             Event::File { path, outcome, on_disk } => {
                 self.files += 1;
                 self.report.add(outcome, *on_disk);
+                if let Some(rows) = &mut self.rows {
+                    rows.write(&csv_row(path, outcome, *on_disk));
+                }
                 self.last = path.file_name().map(|n| n.to_string_lossy().into_owned());
                 if let Outcome::Failed { reason, .. } = outcome {
                     self.problems.push(format!("Couldn't change {}: {}", path.display(), reason.plain()));
@@ -541,6 +660,9 @@ impl Live {
                 }
             }
             Event::FolderUnreadable { path, reason } => {
+                if let Some(rows) = &mut self.rows {
+                    rows.write(&csv_folder_row(path, reason));
+                }
                 if *reason == FailReason::AccessDenied {
                     self.denied.push(path.clone());
                 }
@@ -716,10 +838,11 @@ mod tests {
     /// remembers what was asked and what was started as administrator.
     struct Scripted {
         answers: Mutex<Vec<Option<usize>>>,
-        asked: Mutex<Vec<(String, String, usize)>>,
+        asked: Mutex<Vec<(String, String, Vec<String>)>>,
         elevated: bool,
         admin: Result<bool, String>,
         started: Mutex<Vec<Vec<String>>>,
+        save_to: Option<PathBuf>,
     }
 
     impl Scripted {
@@ -730,6 +853,7 @@ mod tests {
                 elevated: false,
                 admin: Ok(true),
                 started: Mutex::new(Vec::new()),
+                save_to: None,
             }
         }
         fn headlines(&self) -> Vec<String> {
@@ -742,10 +866,11 @@ mod tests {
             Quiet.progress("", poll, &mut || {});
         }
         fn ask(&self, headline: &str, body: &str, _: Option<&str>, buttons: &[Button<'_>], _: Finish) -> Option<usize> {
-            self.asked
-                .lock()
-                .unwrap()
-                .push((headline.to_string(), body.to_string(), buttons.len()));
+            self.asked.lock().unwrap().push((
+                headline.to_string(),
+                body.to_string(),
+                buttons.iter().map(|b| b.text.to_string()).collect(),
+            ));
             self.answers.lock().unwrap().pop().flatten()
         }
         fn elevated(&self) -> bool {
@@ -757,6 +882,10 @@ mod tests {
                 .unwrap()
                 .push(args.iter().map(|a| a.to_string()).collect());
             self.admin.clone()
+        }
+        fn save_as(&self, name: &str) -> Option<PathBuf> {
+            assert!(name.starts_with("Scrimp report"), "{name}");
+            self.save_to.clone()
         }
     }
 
@@ -845,7 +974,7 @@ mod tests {
         assert!(is_compressed(&file));
         let asked = screen.asked.lock().unwrap().clone();
         assert_eq!(asked.len(), 2, "no first-use message as administrator");
-        assert_eq!(asked[1].2, 0, "and no Try Again as Administrator");
+        assert_eq!(asked[1].2, ["Save Report…"], "and no Try Again as Administrator");
     }
 
     #[test]
@@ -926,5 +1055,49 @@ mod tests {
             headline.starts_with("Compression saves ") && headline.ends_with(" in Games"),
             "{headline}"
         );
+    }
+
+    #[test]
+    fn the_report_is_saved_where_chosen_and_the_summary_comes_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let (folder, _) = a_folder_to_compress(dir.path());
+        let places = places(dir.path());
+        std::fs::create_dir_all(places.first_use_note.as_ref().unwrap().parent().unwrap()).unwrap();
+        std::fs::write(places.first_use_note.as_ref().unwrap(), "").unwrap();
+
+        let saved = dir.path().join("Games report.csv");
+        let mut screen = Scripted::new(&[Some(0), None]);
+        screen.save_to = Some(saved.clone());
+        run_on(compress(&folder), &screen, &places, false);
+        let report = std::fs::read_to_string(&saved).unwrap();
+        assert!(report.starts_with(CSV_HEADER), "{report}");
+        assert!(report.contains("notes.txt,Compressed,LZX,"), "{report}");
+        let asked = screen.asked.lock().unwrap().clone();
+        assert_eq!(asked.len(), 2, "the summary shows again after saving");
+        assert!(
+            asked[1].2.is_empty(),
+            "and the report can't be saved twice: {:?}",
+            asked[1].2
+        );
+
+        // Cancelling the Save dialog keeps the button.
+        let screen = Scripted::new(&[Some(0), None]);
+        run_on(compress(&folder), &screen, &places, false);
+        let asked = screen.asked.lock().unwrap().clone();
+        assert_eq!(asked[1].2, ["Save Report…"]);
+
+        // Somewhere that can't be written says so.
+        let mut screen = Scripted::new(&[Some(0), None, None]);
+        screen.save_to = Some(dir.path().join("missing").join("report.csv"));
+        run_on(compress(&folder), &screen, &places, false);
+        assert!(screen.headlines().contains(&"The report couldn't be saved".to_string()));
+    }
+
+    #[test]
+    fn reports_are_named_after_the_selection() {
+        assert_eq!(report_name("Games"), "Scrimp report - Games.csv");
+        assert_eq!(report_name(r"D:\"), "Scrimp report - D.csv");
+        assert_eq!(report_name("3 items"), "Scrimp report - 3 items.csv");
+        assert_eq!(report_name(r"\\"), "Scrimp report.csv");
     }
 }
