@@ -29,7 +29,7 @@ The promise, in their words:
 | `scrimp-core` | The rules: algorithms, states, outcomes, automatic policy, planning, scheduling | Pure Rust, no Windows calls, tested on any OS |
 | `scrimp-win` | Safe wrappers over the Windows compression, file and volume APIs | Added in phase 1; one of two crates allowed `unsafe` |
 | `scrimp-cli` | `scrimp.exe`, the command line | |
-| `scrimpw` | The worker: runs jobs from the menu, shows progress and results | Added in phase 4 |
+| `scrimpw` | The worker: runs jobs from the menu, shows progress and results | One per user; takes jobs from `%LOCALAPPDATA%\Scrimp\jobs` |
 | `scrimp-shell` | The Explorer menu DLL (`IExplorerCommand`) | Added in phase 4; never compresses anything itself |
 | `scrimp-update` | `scrimp update`: finds, checks and installs a newer release | Added in phase 5, adapted from Keevoro |
 | `xtask` | Project tooling: the changelog and cutting a release | From Keevoro |

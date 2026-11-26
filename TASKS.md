@@ -62,7 +62,8 @@ Each of these follows [docs/windows-api.md](docs/windows-api.md).
 ## Phase 4: Explorer menu, released as 0.2
 
 - [ ] `scrimp-shell`: Scrimp Compress and Scrimp Decompress, registered under `HKCU`
-- [ ] `scrimpw`: one worker per user, jobs from the menu, task dialog progress
+- [x] `scrimpw`: one worker per user, jobs from the menu, task dialog progress and summary
+- [ ] `scrimpw --register` and `--unregister`: the menu entries under `HKCU`
 - [ ] Shell test host: menu builds in under 50 ms, and an injected panic leaves Explorer running
 
 ## Phase 5: Interface, installer and updates, released as 0.3
@@ -83,5 +84,7 @@ Things CI can't prove. Tick them when someone has tried them on a real PC.
 - [ ] Is `COMPRESS_ON_WRITE` accepted on Windows 11 24H2 or 25H2, and does a written file stay compressed?
 - [ ] After WOF compresses an EFS-encrypted file, is it still encrypted and readable?
 - [ ] How fast is LZX on a typical desktop, against the runner's 10 MiB per second?
+
+- [ ] The worker's progress and summary dialogs look right at 100%, 150% and 200% scaling, in light and dark mode
 
 `spikes/wof-probe` answers most of these; see [docs/windows-api.md](docs/windows-api.md#running-the-probe-yourself).

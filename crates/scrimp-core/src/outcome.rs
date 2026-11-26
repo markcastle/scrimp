@@ -66,6 +66,20 @@ pub enum FailReason {
     Windows { code: u32, message: String },
 }
 
+impl FailReason {
+    /// Why it failed, in plain words, to follow "Couldn't change <file>: ".
+    pub fn plain(&self) -> String {
+        match self {
+            FailReason::AccessDenied => "Windows didn't allow it. Running as administrator may help.".into(),
+            FailReason::InUse => "it's in use by another app.".into(),
+            FailReason::NotEnoughSpace => "there isn't enough free space.".into(),
+            FailReason::Gone => "it can't be found.".into(),
+            FailReason::Unsupported => "its drive can't save space this way.".into(),
+            FailReason::Windows { code, message } => format!("Windows error {code}: {message}"),
+        }
+    }
+}
+
 /// What happened to one file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
@@ -168,6 +182,26 @@ mod tests {
             unreachable!()
         };
         assert_eq!(left_as, CompressionState::Uncompressed);
+    }
+
+    #[test]
+    fn every_failure_reads_plainly() {
+        for (reason, wanted) in [
+            (FailReason::AccessDenied, "Windows didn't allow it."),
+            (FailReason::InUse, "in use by another app"),
+            (FailReason::NotEnoughSpace, "enough free space"),
+            (FailReason::Gone, "can't be found"),
+            (FailReason::Unsupported, "can't save space"),
+            (
+                FailReason::Windows {
+                    code: 87,
+                    message: "The parameter is incorrect.".into(),
+                },
+                "Windows error 87: The parameter is incorrect.",
+            ),
+        ] {
+            assert!(reason.plain().contains(wanted), "{reason:?}");
+        }
     }
 
     #[test]

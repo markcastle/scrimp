@@ -10,6 +10,7 @@
 
 mod algorithm;
 mod engine;
+mod job;
 mod outcome;
 mod policy;
 mod report;
@@ -21,6 +22,7 @@ pub use algorithm::{Algorithm, ParseError, Target};
 pub use engine::{
     Control, Disk, DiskError, EntryKind, Event, FileFacts, FileId, Job, Storage, VolumeFacts, Workers, run,
 };
+pub use job::{JOB_SCHEMA_VERSION, JobError, JobRequest, has_waiting, jobs_folder, take_next, worker_lock_name};
 pub use outcome::{FailReason, Outcome, Sizes, SkipReason};
 pub use policy::{ChangesOften, Choice, Plan, Policy};
 pub use report::{Mode, Report, format_count, format_size};
