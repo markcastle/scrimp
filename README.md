@@ -8,7 +8,7 @@ It isn't an archive format and it doesn't add a compression engine of its own. W
 
 ## Status
 
-Scrimp is at the very start of development. Nothing is released yet, and nothing here is ready to run on your files.
+Scrimp is in early development. The command line works; the Explorer menu is next. Try it on files you have backed up first.
 
 The plan, including what the first version will and won't do, is in [docs/plan.md](docs/plan.md). The order of work is in [TASKS.md](TASKS.md).
 
@@ -27,11 +27,27 @@ The plan, including what the first version will and won't do, is in [docs/plan.m
 
 ## Install
 
-Not yet. When 0.1 is released, one line in PowerShell will install the command line:
+One line in PowerShell installs the command line. Running it again updates it.
 
 ```powershell
 irm https://raw.githubusercontent.com/markcastle/scrimp/main/install.ps1 | iex
 ```
+
+## Use
+
+```powershell
+scrimp analyse "D:\Games"
+```
+
+```powershell
+scrimp compress "D:\Games"
+```
+
+```powershell
+scrimp decompress "D:\Games"
+```
+
+Everything else, including `--json` for scripts, is in [docs/command-line.md](docs/command-line.md).
 
 ## Building it yourself
 

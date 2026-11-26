@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **The `scrimp` command line.** `scrimp compress` saves space on files and folders using the compression built into Windows: your files stay exactly as they are, just smaller on disk, and apps open them as normal. `scrimp decompress` undoes it. `scrimp inspect` shows how a file is stored, and `scrimp analyse` shows how much space a folder takes and what compressing it would do, without changing anything.
+- **Automatic choices.** Scrimp picks a method for each kind of file, and leaves alone photos, videos and archives (already compressed), files that change often (Windows would undo the saving), Windows' own files, links, cloud files and encrypted files.
+- **Honest results.** At the end Scrimp says what it saved, such as "Saved 35.2 GB. Games now takes up 51.2 GB instead of 86.4 GB.", and why any files were left alone.
+- **For scripts:** `--json` output, `--dry-run`, `--workers`, and documented exit codes. See [docs/command-line.md](docs/command-line.md).
+- **Settings** in `%LOCALAPPDATA%\Scrimp\settings.json`: the default method, the smallest file worth compressing, what to do with files that change often, and per-extension choices.
 
 [Unreleased]: https://github.com/markcastle/scrimp/commits/main
