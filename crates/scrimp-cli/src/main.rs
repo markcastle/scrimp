@@ -15,11 +15,16 @@ mod commands;
 mod json;
 mod words;
 
+use std::process::ExitCode;
+
 use clap::Parser;
 
-fn main() {
+/// Returns the exit code rather than calling `std::process::exit`, so the
+/// program shuts down normally: buffered output is written, and so is the
+/// coverage data CI measures.
+fn main() -> ExitCode {
     let cli = cli::Cli::parse();
-    std::process::exit(run(cli));
+    ExitCode::from(u8::try_from(run(cli)).unwrap_or(1))
 }
 
 #[cfg(windows)]
