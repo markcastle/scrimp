@@ -121,6 +121,54 @@ impl Installed {
     }
 }
 
+/// What `scrimp update` does, start to finish, for the program at `exe`
+/// running as version `current`. Each step is described through `say` as it
+/// happens. With `check_only`, it stops once it knows whether there's a
+/// newer version.
+pub fn run(
+    web: &dyn Web,
+    current: &str,
+    exe: &Path,
+    check_only: bool,
+    say: &mut dyn FnMut(&str),
+) -> Result<(), UpdateError> {
+    clean_up(exe);
+    say("Checking for a newer Scrimp…");
+    let release = match check(web, current)? {
+        Check::UpToDate => {
+            say(&format!("Scrimp {current} is the newest version."));
+            return Ok(());
+        }
+        Check::Available(release) => release,
+    };
+    say(&format!(
+        "Scrimp {} is available. What's new: {}",
+        release.version, release.page
+    ));
+    if check_only {
+        return Ok(());
+    }
+    let installed = Installed::of(exe);
+    let file = download(web, &release, installed.file())?;
+    match &installed {
+        Installed::ByInstaller(folder) => {
+            start_installer(&file, folder)?;
+            say(&format!(
+                "Installing Scrimp {}. The installer carries on by itself once this command has finished.",
+                release.version
+            ));
+        }
+        Installed::CommandLineOnly(exe) => {
+            replace_program(exe, &file)?;
+            say(&format!(
+                "Scrimp {} is installed. New terminal windows will use it.",
+                release.version
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Reads the reply from GitHub's "latest release" address.
 pub fn parse_release(json: &str) -> Result<Release, UpdateError> {
     let v: serde_json::Value = serde_json::from_str(json).map_err(|e| UpdateError::Unexpected(e.to_string()))?;

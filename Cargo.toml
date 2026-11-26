@@ -27,7 +27,10 @@ tempfile = "3"
 thiserror = "2"
 # `scrimp update`'s only network client, as Keevoro's: it trusts what
 # Windows trusts, so office proxies with their own certificates work.
-ureq = { version = "3", features = ["platform-verifier"] }
+# Windows' own certificate store checks GitHub's certificate (platform-verifier),
+# so ureq's bundled copy of Mozilla's roots is left out. `_ring` is how ureq
+# names "rustls with ring" without those roots.
+ureq = { version = "3", default-features = false, features = ["rustls-no-provider", "_ring", "gzip", "platform-verifier"] }
 # The core of Microsoft's bindings, for implementing COM objects (the
 # Explorer menu DLL).
 windows-core = "0.62"

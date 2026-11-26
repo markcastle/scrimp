@@ -324,3 +324,71 @@ fn githubs_refusals_are_explained() {
         sent.join().unwrap();
     }
 }
+
+/// Runs the whole of `scrimp update` against `web`, returning what it said.
+fn run_update(web: &FakeWeb, current: &str, exe: &Path, check_only: bool) -> (Result<(), UpdateError>, Vec<String>) {
+    let mut said = Vec::new();
+    let result = run(web, current, exe, check_only, &mut |line| said.push(line.to_string()));
+    (result, said)
+}
+
+#[test]
+fn update_says_when_scrimp_is_already_the_newest() {
+    let dir = tempfile::tempdir().unwrap();
+    let exe = dir.path().join("scrimp.exe");
+    std::fs::write(&exe, b"version one").unwrap();
+    let (result, said) = run_update(&github("v0.2.0"), "0.2.0", &exe, false);
+    result.unwrap();
+    assert_eq!(said.last().unwrap(), "Scrimp 0.2.0 is the newest version.");
+    assert_eq!(std::fs::read(&exe).unwrap(), b"version one");
+}
+
+#[test]
+fn update_check_only_reports_and_changes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let exe = dir.path().join("scrimp.exe");
+    std::fs::write(&exe, b"version one").unwrap();
+    let (result, said) = run_update(&github("v0.3.0"), "0.2.0", &exe, true);
+    result.unwrap();
+    assert!(
+        said.last().unwrap().starts_with("Scrimp 0.3.0 is available."),
+        "{said:?}"
+    );
+    assert_eq!(std::fs::read(&exe).unwrap(), b"version one");
+}
+
+#[test]
+fn update_swaps_a_command_line_only_install() {
+    let dir = tempfile::tempdir().unwrap();
+    let exe = dir.path().join("scrimp.exe");
+    std::fs::write(&exe, b"version one").unwrap();
+    let (result, said) = run_update(&github("v0.3.0"), "0.2.0", &exe, false);
+    result.unwrap();
+    assert_eq!(std::fs::read(&exe).unwrap(), PROGRAM);
+    assert_eq!(
+        said.last().unwrap(),
+        "Scrimp 0.3.0 is installed. New terminal windows will use it."
+    );
+}
+
+#[test]
+fn update_passes_trouble_on_and_changes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let exe = dir.path().join("scrimp.exe");
+    std::fs::write(&exe, b"version one").unwrap();
+    let mut web = github("v0.3.0");
+    web.latest = Err(());
+    assert!(matches!(
+        run_update(&web, "0.2.0", &exe, false).0,
+        Err(UpdateError::NotFound)
+    ));
+    let mut web = github("v0.3.0");
+    for bytes in web.files.values_mut().filter(|b| b.as_slice() == PROGRAM) {
+        *bytes = b"damaged".to_vec();
+    }
+    assert!(matches!(
+        run_update(&web, "0.2.0", &exe, false).0,
+        Err(UpdateError::BadChecksum)
+    ));
+    assert_eq!(std::fs::read(&exe).unwrap(), b"version one");
+}

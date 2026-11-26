@@ -194,5 +194,13 @@ mod tests {
         ])
         .unwrap();
         assert!(cli.settings.is_some());
+        let Command::Update(u) = parse(&["update", "--check"]).unwrap().command else {
+            panic!("not update")
+        };
+        assert!(u.check);
+        let Command::Update(u) = parse(&["update"]).unwrap().command else {
+            panic!("not update")
+        };
+        assert!(!u.check);
     }
 }
