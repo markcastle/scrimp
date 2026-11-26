@@ -354,6 +354,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "scrimp-shell"
+version = "0.1.0"
+dependencies = [
+ "scrimp-core",
+ "scrimp-win",
+ "tempfile",
+ "windows",
+ "windows-core",
+]
+
+[[package]]
 name = "scrimp-win"
 version = "0.1.0"
 dependencies = [

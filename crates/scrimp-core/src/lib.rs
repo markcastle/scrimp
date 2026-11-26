@@ -15,6 +15,7 @@ mod outcome;
 mod policy;
 mod report;
 mod settings;
+pub mod shell_ids;
 mod space;
 mod state;
 

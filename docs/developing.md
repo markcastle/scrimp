@@ -46,6 +46,32 @@ It prints the `SCRIMP_TEST_*` variables to set in the window you run `cargo test
 .\scripts\test-volumes.ps1 -Remove
 ```
 
+### Trying the Explorer menu
+
+The menu can't be tested on GitHub's runners, because they have no desktop. To try it on your own PC, build everything, then add the menu for your user:
+
+```powershell
+cargo build --workspace
+```
+
+```powershell
+.\target\debug\scrimpw.exe --register
+```
+
+Right-click a file or folder. On Windows 10 you'll see **Scrimp Compress** and **Scrimp Decompress**; on Windows 11 they're under **Show more options** (or Shift + right-click). Hold Shift to see the choices under Scrimp Compress.
+
+Explorer keeps the DLL loaded once it has used it, so to try a new build, take the menu out, restart Explorer, rebuild, and add it again:
+
+```powershell
+.\target\debug\scrimpw.exe --unregister
+```
+
+```powershell
+Stop-Process -Name explorer
+```
+
+Explorer starts again by itself. A crash in Scrimp's menu code is caught and turned into an error, so it can't take Explorer down; if Explorer ever does go down with Scrimp's menu registered, that's a bug to report with the steps that caused it.
+
 ### Coverage
 
 CI measures test coverage on Windows and fails under 90% of lines. Code that compresses, decompresses, verifies or detects a file's state is held to 95% in review. To see coverage yourself on Windows:

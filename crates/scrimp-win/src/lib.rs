@@ -38,6 +38,8 @@ mod file;
 #[cfg(windows)]
 mod instance;
 #[cfg(windows)]
+pub mod menu;
+#[cfg(windows)]
 mod path;
 #[cfg(all(windows, feature = "ui"))]
 pub mod ui;
