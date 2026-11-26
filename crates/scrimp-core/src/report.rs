@@ -36,7 +36,9 @@ enum Group {
     Encrypted,
     Links,
     DriveCantDoIt,
+    WofNotRunning,
     Unknown,
+    FolderUnreadable,
     Cancelled,
 }
 
@@ -94,6 +96,14 @@ impl Group {
                 "1 file is on a drive that can't save space this way.",
                 "{n} files are on a drive that can't save space this way.",
             ),
+            Group::WofNotRunning => (
+                "1 file wasn't compressed because Windows' compression driver isn't running on its drive. Choose For Files That Change to use NTFS compression there instead.",
+                "{n} files weren't compressed because Windows' compression driver isn't running on their drive. Choose For Files That Change to use NTFS compression there instead.",
+            ),
+            Group::FolderUnreadable => (
+                "1 folder couldn't be opened, so the files in it were left alone.",
+                "{n} folders couldn't be opened, so the files in them were left alone.",
+            ),
             Group::Unknown => (
                 "1 file was left alone because Scrimp couldn't tell how it's stored.",
                 "{n} files were left alone because Scrimp couldn't tell how they're stored.",
@@ -121,6 +131,7 @@ impl Group {
                 UnsupportedReason::Encrypted => Group::Encrypted,
                 UnsupportedReason::Link => Group::Links,
                 UnsupportedReason::SpecialFile => Group::Unknown,
+                UnsupportedReason::WofNotRunning => Group::WofNotRunning,
                 UnsupportedReason::FileSystem(_)
                 | UnsupportedReason::ClusterTooLarge
                 | UnsupportedReason::NetworkLocation => Group::DriveCantDoIt,
@@ -202,6 +213,11 @@ impl Report {
         };
         self.before += before;
         self.after += after;
+    }
+
+    /// Adds a folder that couldn't be opened, so its files were never seen.
+    pub fn add_unreadable_folder(&mut self) {
+        self.count(Group::FolderUnreadable);
     }
 
     fn count(&mut self, group: Group) {
@@ -354,6 +370,7 @@ mod tests {
             SkipReason::CantCompressHere(UnsupportedReason::FileSystem("exFAT".into())),
             SkipReason::CantCompressHere(UnsupportedReason::ClusterTooLarge),
             SkipReason::CantCompressHere(UnsupportedReason::NetworkLocation),
+            SkipReason::CantCompressHere(UnsupportedReason::WofNotRunning),
             SkipReason::SameFileAlreadyDone,
         ];
         for reason in skips {
@@ -380,9 +397,10 @@ mod tests {
         }
         r.add(&Outcome::Cancelled, 10);
         r.add(&Outcome::AlreadyDone, 10);
+        r.add_unreadable_folder();
         assert_eq!(r.failures(), 6);
-        // 21 files of 10 bytes, less the hardlink's second name, counted once.
-        assert_eq!(r.sizes(), (210, 210));
+        // 22 files of 10 bytes, less the hardlink's second name, counted once.
+        assert_eq!(r.sizes(), (220, 220));
         assert_eq!(
             r.summary(None),
             [
@@ -401,7 +419,9 @@ mod tests {
                 "1 encrypted file can't be compressed.",
                 "1 link was left alone. Scrimp never follows links.",
                 "4 files are on a drive that can't save space this way.",
+                "1 file wasn't compressed because Windows' compression driver isn't running on its drive. Choose For Files That Change to use NTFS compression there instead.",
                 "2 files were left alone because Scrimp couldn't tell how they're stored.",
+                "1 folder couldn't be opened, so the files in it were left alone.",
                 "Stopped before 1 file.",
             ]
         );

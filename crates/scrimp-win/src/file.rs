@@ -38,6 +38,12 @@ pub struct FileInfo {
     pub on_disk: u64,
     /// Whether the file is marked read-only. Scrimp keeps it that way.
     pub read_only: bool,
+    /// How many names the file has. More than one means a hardlink.
+    pub links: u32,
+    /// The file's identity on its drive (volume serial number, file index),
+    /// the same under each of its names. `None` for files left alone
+    /// without being opened.
+    pub id: Option<(u64, u64)>,
     raw: Raw,
 }
 
@@ -68,6 +74,8 @@ pub fn inspect(path: &Path) -> Result<FileInfo, Error> {
         logical,
         on_disk: logical,
         read_only,
+        links: 1,
+        id: None,
         raw: Raw {
             wof: WofReading::None,
             ntfs: false,
@@ -94,13 +102,17 @@ pub fn inspect(path: &Path) -> Result<FileInfo, Error> {
     }
 
     let wof = ffi::wof_reading(path)?;
-    let ntfs = ffi::ntfs_format(&Handle::open(path, Access::Inspect)?)? != FORMAT_NONE;
+    let handle = Handle::open(path, Access::Inspect)?;
+    let ntfs = ffi::ntfs_format(&handle)? != FORMAT_NONE;
+    let (volume, file, links) = ffi::identity(&handle)?;
     let raw = Raw { wof, ntfs };
     Ok(FileInfo {
         state: state_of(raw),
         logical,
         on_disk: ffi::on_disk(path)?,
         read_only,
+        links,
+        id: Some((volume, file)),
         raw,
     })
 }
@@ -324,6 +336,8 @@ mod tests {
             logical: 0,
             on_disk: 0,
             read_only: false,
+            links: 1,
+            id: None,
             raw: Raw {
                 wof: WofReading::Provider(1),
                 ntfs: false,

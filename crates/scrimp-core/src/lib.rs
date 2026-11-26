@@ -9,6 +9,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 mod algorithm;
+mod engine;
 mod outcome;
 mod policy;
 mod report;
@@ -16,6 +17,9 @@ mod space;
 mod state;
 
 pub use algorithm::{Algorithm, ParseError, Target};
+pub use engine::{
+    Control, Disk, DiskError, EntryKind, Event, FileFacts, FileId, Job, Storage, VolumeFacts, Workers, run,
+};
 pub use outcome::{FailReason, Outcome, Sizes, SkipReason};
 pub use policy::{ChangesOften, Choice, Plan, Policy};
 pub use report::{Mode, Report, format_count, format_size};

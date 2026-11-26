@@ -43,6 +43,10 @@ pub struct VolumeInfo {
     pub drive_type: DriveType,
     /// Free space available to this user, in bytes.
     pub free_bytes: u64,
+    /// The volume's total size in bytes.
+    pub size: u64,
+    /// Whether the drive is a spinning disk, if the device says.
+    pub spinning: Option<bool>,
     flags: u32,
 }
 
@@ -82,14 +86,32 @@ pub fn volume(path: &Path) -> Result<VolumeInfo, Error> {
         _ => DriveType::Other,
     };
     let (filesystem, flags) = ffi::volume_information(&root)?;
+    let (free_bytes, size) = ffi::space(&root)?;
     Ok(VolumeInfo {
         cluster_size: ffi::cluster_size(&root)?,
-        free_bytes: ffi::free_bytes(&root)?,
+        spinning: device_of(&root).and_then(|d| ffi::seek_penalty(&d)),
+        free_bytes,
+        size,
         root,
         filesystem,
         drive_type,
         flags,
     })
+}
+
+/// The device path for a volume root: `C:\` becomes `\\.\C:`, and a
+/// volume GUID path loses its trailing backslash. A volume mounted in a
+/// folder has no device path Scrimp can work out, so `None`.
+fn device_of(root: &Path) -> Option<PathBuf> {
+    let text = root.to_string_lossy();
+    let bytes = text.as_bytes();
+    if bytes.len() == 3 && bytes[1] == b':' && bytes[2] == b'\\' && bytes[0].is_ascii_alphabetic() {
+        return Some(PathBuf::from(format!(r"\\.\{}", &text[..2])));
+    }
+    if text.starts_with(r"\\?\Volume{") {
+        return Some(PathBuf::from(text.trim_end_matches('\\')));
+    }
+    None
 }
 
 /// `\\?\C:\` becomes `C:\`, because some volume calls don't accept the
@@ -113,6 +135,8 @@ mod tests {
             cluster_size,
             drive_type,
             free_bytes: 0,
+            size: 0,
+            spinning: None,
             flags,
         }
     }
@@ -146,6 +170,16 @@ mod tests {
             share.unsupported(Algorithm::Lzx),
             Some(UnsupportedReason::NetworkLocation)
         );
+    }
+
+    #[test]
+    fn device_paths_are_worked_out_from_roots() {
+        assert_eq!(device_of(Path::new(r"C:\")), Some(PathBuf::from(r"\\.\C:")));
+        assert_eq!(
+            device_of(Path::new(r"\\?\Volume{0000}\")),
+            Some(PathBuf::from(r"\\?\Volume{0000}"))
+        );
+        assert_eq!(device_of(Path::new(r"C:\Mounts\Archive\")), None);
     }
 
     #[test]

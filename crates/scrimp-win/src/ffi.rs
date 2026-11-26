@@ -9,13 +9,17 @@ use std::path::{Path, PathBuf};
 
 use windows::Win32::Foundation::{CloseHandle, GetLastError, HANDLE};
 use windows::Win32::Storage::FileSystem::{
-    CreateFileW, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, FindClose,
-    FindFirstFileW, GetCompressedFileSizeW, GetDiskFreeSpaceExW, GetDiskFreeSpaceW, GetDriveTypeW,
-    GetVolumeInformationW, GetVolumePathNameW, OPEN_EXISTING, SetFileAttributesW, WIN32_FIND_DATAW,
-    WOF_FILE_COMPRESSION_INFO_V1, WOF_PROVIDER_FILE, WofIsExternalFile, WofSetFileDataLocation,
+    BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
+    FILE_SHARE_WRITE, FindClose, FindFirstFileW, GetCompressedFileSizeW, GetDiskFreeSpaceExW, GetDiskFreeSpaceW,
+    GetDriveTypeW, GetFileInformationByHandle, GetVolumeInformationW, GetVolumePathNameW, OPEN_EXISTING,
+    SetFileAttributesW, WIN32_FIND_DATAW, WOF_FILE_COMPRESSION_INFO_V1, WOF_PROVIDER_FILE, WofIsExternalFile,
+    WofSetFileDataLocation,
 };
 use windows::Win32::System::IO::DeviceIoControl;
-use windows::Win32::System::Ioctl::{FSCTL_DELETE_EXTERNAL_BACKING, FSCTL_GET_COMPRESSION, FSCTL_SET_COMPRESSION};
+use windows::Win32::System::Ioctl::{
+    DEVICE_SEEK_PENALTY_DESCRIPTOR, FSCTL_DELETE_EXTERNAL_BACKING, FSCTL_GET_COMPRESSION, FSCTL_SET_COMPRESSION,
+    IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery, STORAGE_PROPERTY_QUERY, StorageDeviceSeekPenaltyProperty,
+};
 use windows::core::{BOOL, PCWSTR};
 
 use crate::error::{Call, Error};
@@ -42,6 +46,8 @@ pub(crate) enum Access {
     Wof,
     /// What NTFS compression needs. Only use on a file with no WOF compression.
     Ntfs,
+    /// No access to the data at all: enough to ask a drive what it is.
+    Query,
 }
 
 impl Access {
@@ -50,6 +56,7 @@ impl Access {
             Access::Inspect => READ_ATTRIBUTES | READ_DATA | SYNCHRONIZE,
             Access::Wof => GENERIC_READ,
             Access::Ntfs => READ_ATTRIBUTES | READ_DATA | WRITE_DATA | SYNCHRONIZE,
+            Access::Query => 0,
         }
     }
 }
@@ -111,6 +118,47 @@ impl Drop for Handle {
             let _ = CloseHandle(self.0);
         }
     }
+}
+
+/// A file's identity on its drive and how many names it has, which is
+/// how a hardlinked file is recognised under each of its names.
+pub(crate) fn identity(handle: &Handle) -> Result<(u64, u64, u32), Error> {
+    let mut info = BY_HANDLE_FILE_INFORMATION::default();
+    // SAFETY: the handle is open and `info` is a live, correctly sized structure.
+    unsafe { GetFileInformationByHandle(handle.0, &mut info) }.map_err(|e| Error::from_windows(&e, Call::Other))?;
+    let file = (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow);
+    Ok((u64::from(info.dwVolumeSerialNumber), file, info.nNumberOfLinks))
+}
+
+/// Whether the device behind a drive has a seek penalty, which means a
+/// spinning disk. `device` is a path such as `\\.\C:`. `None` when the
+/// device doesn't say, as virtual disks often don't.
+pub(crate) fn seek_penalty(device: &Path) -> Option<bool> {
+    let handle = Handle::open(device, Access::Query).ok()?;
+    let query = STORAGE_PROPERTY_QUERY {
+        PropertyId: StorageDeviceSeekPenaltyProperty,
+        QueryType: PropertyStandardQuery,
+        AdditionalParameters: [0],
+    };
+    let mut answer = DEVICE_SEEK_PENALTY_DESCRIPTOR::default();
+    let mut returned = 0u32;
+    // SAFETY: the handle is open; `query` and `answer` are live, correctly
+    // sized structures whose sizes are passed with them; the call is
+    // synchronous.
+    let result = unsafe {
+        DeviceIoControl(
+            handle.0,
+            IOCTL_STORAGE_QUERY_PROPERTY,
+            Some((&query as *const STORAGE_PROPERTY_QUERY).cast()),
+            size_of::<STORAGE_PROPERTY_QUERY>() as u32,
+            Some((&mut answer as *mut DEVICE_SEEK_PENALTY_DESCRIPTOR).cast()),
+            size_of::<DEVICE_SEEK_PENALTY_DESCRIPTOR>() as u32,
+            Some(&mut returned),
+            None,
+        )
+    };
+    (result.is_ok() && returned as usize >= size_of::<DEVICE_SEEK_PENALTY_DESCRIPTOR>())
+        .then_some(answer.IncursSeekPenalty)
 }
 
 /// What WOF says about a file.
@@ -272,14 +320,14 @@ pub(crate) fn cluster_size(root: &Path) -> Result<u64, Error> {
     Ok(u64::from(sectors) * u64::from(bytes))
 }
 
-/// Free bytes available to this user on the volume.
-pub(crate) fn free_bytes(root: &Path) -> Result<u64, Error> {
+/// Free bytes available to this user on the volume, and its total size.
+pub(crate) fn space(root: &Path) -> Result<(u64, u64), Error> {
     let w = wide(root);
-    let mut free = 0u64;
-    // SAFETY: `w` is NUL-terminated; `free` is a live local.
-    unsafe { GetDiskFreeSpaceExW(PCWSTR(w.as_ptr()), Some(&mut free), None, None) }
+    let (mut free, mut total) = (0u64, 0u64);
+    // SAFETY: `w` is NUL-terminated; both out-values are live locals.
+    unsafe { GetDiskFreeSpaceExW(PCWSTR(w.as_ptr()), Some(&mut free), Some(&mut total), None) }
         .map_err(|e| Error::from_windows(&e, Call::Other))?;
-    Ok(free)
+    Ok((free, total))
 }
 
 /// Windows' drive type code for a volume root.
