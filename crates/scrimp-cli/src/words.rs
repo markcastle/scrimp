@@ -69,22 +69,11 @@ fn why_unsupported(reason: &UnsupportedReason) -> String {
     }
 }
 
-fn why_failed(reason: &FailReason) -> String {
-    match reason {
-        FailReason::AccessDenied => "Windows didn't allow it. Running as administrator may help.".into(),
-        FailReason::InUse => "it's in use by another app.".into(),
-        FailReason::NotEnoughSpace => "there isn't enough free space.".into(),
-        FailReason::Gone => "it can't be found.".into(),
-        FailReason::Unsupported => "its drive can't save space this way.".into(),
-        FailReason::Windows { code, message } => format!("Windows error {code}: {message}"),
-    }
-}
-
 /// A line to show for a file whose outcome needs attention, or `None` for
 /// the ordinary outcomes the summary covers.
 pub fn attention(path: &Path, outcome: &Outcome) -> Option<String> {
     match outcome {
-        Outcome::Failed { reason, .. } => Some(format!("Couldn't change {}: {}", path.display(), why_failed(reason))),
+        Outcome::Failed { reason, .. } => Some(format!("Couldn't change {}: {}", path.display(), reason.plain())),
         _ => None,
     }
 }

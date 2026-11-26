@@ -364,6 +364,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "scrimpw"
+version = "0.1.0"
+dependencies = [
+ "scrimp-core",
+ "scrimp-win",
+ "tempfile",
+]
+
+[[package]]
 name = "serde"
 version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"

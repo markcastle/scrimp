@@ -36,7 +36,11 @@ mod ffi;
 #[cfg(windows)]
 mod file;
 #[cfg(windows)]
+mod instance;
+#[cfg(windows)]
 mod path;
+#[cfg(all(windows, feature = "ui"))]
+pub mod ui;
 #[cfg(windows)]
 mod volume;
 
@@ -44,5 +48,7 @@ mod volume;
 pub use disk::WindowsDisk;
 #[cfg(windows)]
 pub use file::{FileInfo, compress, decompress, inspect};
+#[cfg(windows)]
+pub use instance::SingleInstance;
 #[cfg(windows)]
 pub use volume::{DriveType, VolumeInfo, volume};

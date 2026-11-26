@@ -1,0 +1,22 @@
+[package]
+name = "scrimpw"
+description = "scrimpw.exe: the worker that runs jobs from the Explorer menu, with Windows' own progress dialog. Never opens a console window."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+scrimp-core.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+scrimp-win = { workspace = true, features = ["ui"] }
+
+[dev-dependencies]
+scrimp-win.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

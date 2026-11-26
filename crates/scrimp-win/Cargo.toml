@@ -15,6 +15,11 @@ thiserror.workspace = true
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true
 
+[features]
+# Task dialogs, for the worker only. They need Common Controls v6, which a
+# program gets from its manifest; see src/ui.rs.
+ui = ["windows/Win32_UI_Controls", "windows/Win32_UI_WindowsAndMessaging"]
+
 [dev-dependencies]
 tempfile.workspace = true
 
