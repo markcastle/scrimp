@@ -13,6 +13,8 @@
 //! scrimpw.exe [--job FILE]         take jobs (the file is a hint; every waiting job is taken)
 //! scrimpw.exe --quiet              no windows: write the summary to the console, for tests
 //! scrimpw.exe --jobs-folder DIR    use another jobs folder, for tests
+//! scrimpw.exe --register           add Scrimp to Explorer's menu for this user
+//! scrimpw.exe --unregister         take it out again
 //! ```
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
@@ -31,6 +33,8 @@ use std::process::ExitCode;
 struct Args {
     quiet: bool,
     jobs_folder: Option<PathBuf>,
+    register: bool,
+    unregister: bool,
 }
 
 impl Args {
@@ -40,6 +44,8 @@ impl Args {
         while let Some(a) = args.next() {
             match a.as_str() {
                 "--quiet" => out.quiet = true,
+                "--register" => out.register = true,
+                "--unregister" => out.unregister = true,
                 "--jobs-folder" => out.jobs_folder = args.next().map(PathBuf::from),
                 // `--job FILE` names the job just written. Every waiting job
                 // is taken anyway, so the name only needs skipping.
@@ -87,7 +93,7 @@ mod tests {
             ]),
             Args {
                 quiet: true,
-                jobs_folder: None
+                ..Args::default()
             }
         );
         assert_eq!(
@@ -95,5 +101,7 @@ mod tests {
             Some(PathBuf::from(r"D:\jobs"))
         );
         assert_eq!(parse(&["--job"]), Args::default());
+        assert!(parse(&["--register"]).register);
+        assert!(parse(&["--unregister", "--quiet"]).unregister);
     }
 }

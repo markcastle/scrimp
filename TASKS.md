@@ -61,10 +61,10 @@ Each of these follows [docs/windows-api.md](docs/windows-api.md).
 
 ## Phase 4: Explorer menu, released as 0.2
 
-- [ ] `scrimp-shell`: Scrimp Compress and Scrimp Decompress, registered under `HKCU`
+- [x] `scrimp-shell`: Scrimp Compress and Scrimp Decompress, with the Shift submenu, registered under `HKCU`
 - [x] `scrimpw`: one worker per user, jobs from the menu, task dialog progress and summary
-- [ ] `scrimpw --register` and `--unregister`: the menu entries under `HKCU`
-- [ ] Shell test host: menu builds in under 50 ms, and an injected panic leaves Explorer running
+- [x] `scrimpw --register` and `--unregister`: the menu entries under `HKCU`, with nothing left behind
+- [x] Shell test host: menu builds in under 50 ms, and an injected panic comes back as an error (`crates/scrimp-shell/src/tests.rs`)
 
 ## Phase 5: Interface, installer and updates, released as 0.3
 
@@ -85,6 +85,9 @@ Things CI can't prove. Tick them when someone has tried them on a real PC.
 - [ ] After WOF compresses an EFS-encrypted file, is it still encrypted and readable?
 - [ ] How fast is LZX on a typical desktop, against the runner's 10 MiB per second?
 
+- [ ] S6: Scrimp Compress and Scrimp Decompress appear on Windows 10 and under Windows 11's Show more options after `scrimpw --register`, for a file, a folder, a drive and 20 selected files
+- [ ] S6: Shift + right-click shows Automatic, Faster to Open, Smallest and For Files That Change under Scrimp Compress
+- [ ] S6: a compressed file shows only Scrimp Decompress, and a USB stick (exFAT) shows neither
 - [ ] The worker's progress and summary dialogs look right at 100%, 150% and 200% scaling, in light and dark mode
 
 `spikes/wof-probe` answers most of these; see [docs/windows-api.md](docs/windows-api.md#running-the-probe-yourself).

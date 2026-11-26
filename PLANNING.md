@@ -30,7 +30,7 @@ The promise, in their words:
 | `scrimp-win` | Safe wrappers over the Windows compression, file and volume APIs | Added in phase 1; one of two crates allowed `unsafe` |
 | `scrimp-cli` | `scrimp.exe`, the command line | |
 | `scrimpw` | The worker: runs jobs from the menu, shows progress and results | One per user; takes jobs from `%LOCALAPPDATA%\Scrimp\jobs` |
-| `scrimp-shell` | The Explorer menu DLL (`IExplorerCommand`) | Added in phase 4; never compresses anything itself |
+| `scrimp-shell` | The Explorer menu DLL (`IExplorerCommand`) | Never compresses anything itself; hands the selection to `scrimpw` |
 | `scrimp-update` | `scrimp update`: finds, checks and installs a newer release | Added in phase 5, adapted from Keevoro |
 | `xtask` | Project tooling: the changelog and cutting a release | From Keevoro |
 
@@ -47,7 +47,8 @@ Add a row when a crate is added, with why.
 | `serde`, `serde_json` | `scrimp-core` | Reading `settings.json` |
 | `anyhow`, `regex` | `xtask` | Errors and changelog parsing in tooling |
 | `tempfile` | `xtask` and `scrimp-win` tests | Throwaway git repositories and test files |
-| `windows` | `scrimp-win` | Microsoft's bindings to the Windows API |
+| `windows` | `scrimp-win`, `scrimp-shell` | Microsoft's bindings to the Windows API |
+| `windows-core` | `scrimp-shell` | Implementing the COM objects Explorer calls |
 
 ## Platforms
 

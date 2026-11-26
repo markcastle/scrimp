@@ -1,6 +1,6 @@
 //! Taking jobs and running them, with a progress dialog and a summary.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::{Mutex, PoisonError};
 
@@ -16,6 +16,9 @@ use crate::Args;
 const TITLE: &str = "Scrimp";
 
 pub fn main(args: &Args) -> ExitCode {
+    if args.register || args.unregister {
+        return menu(args);
+    }
     let Some(folder) = args.jobs_folder.clone().or_else(jobs_folder) else {
         return ExitCode::from(5);
     };
@@ -35,6 +38,71 @@ pub fn main(args: &Args) -> ExitCode {
         // the lock still held and left. If so, carry on with it.
         if !has_waiting(&folder) {
             return ExitCode::SUCCESS;
+        }
+    }
+}
+
+/// Where the menu DLL is: in the installed layout,
+/// `shell\<version>\scrimp_shell.dll` beside this program (one folder per
+/// version, because Explorer keeps the old one loaded); in a development
+/// build, `scrimp_shell.dll` beside it.
+fn find_dll(exe_folder: &Path) -> Option<PathBuf> {
+    let installed = exe_folder
+        .join("shell")
+        .join(env!("CARGO_PKG_VERSION"))
+        .join("scrimp_shell.dll");
+    let built = exe_folder.join("scrimp_shell.dll");
+    [installed, built].into_iter().find(|p| p.is_file())
+}
+
+fn menu(args: &Args) -> ExitCode {
+    if args.unregister {
+        return match scrimp_win::menu::unregister() {
+            Ok(()) => {
+                say(args, "Scrimp is no longer in Explorer's menu", "", None);
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                say(
+                    args,
+                    "Scrimp couldn't be taken out of Explorer's menu",
+                    &format!("{e}."),
+                    None,
+                );
+                ExitCode::from(5)
+            }
+        };
+    }
+    let dll = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().and_then(find_dll));
+    let Some(dll) = dll else {
+        say(
+            args,
+            "Scrimp couldn't be added to Explorer's menu",
+            "scrimp_shell.dll isn't next to scrimpw.exe. Reinstalling Scrimp should put it back.",
+            None,
+        );
+        return ExitCode::from(5);
+    };
+    match scrimp_win::menu::register(&dll) {
+        Ok(()) => {
+            say(
+                args,
+                "Scrimp is in Explorer's menu",
+                "Right-click a file or folder and choose Scrimp Compress. On Windows 11, it's under Show more options.",
+                None,
+            );
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            say(
+                args,
+                "Scrimp couldn't be added to Explorer's menu",
+                &format!("{e}."),
+                None,
+            );
+            ExitCode::from(5)
         }
     }
 }
@@ -243,6 +311,23 @@ mod tests {
         });
         assert_eq!(live.problems.len(), 3);
         assert!(live.problems[0].contains("in use by another app"));
+    }
+
+    #[test]
+    fn the_menu_dll_is_found_installed_or_built() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(find_dll(dir.path()), None);
+        let built = dir.path().join("scrimp_shell.dll");
+        std::fs::write(&built, "").unwrap();
+        assert_eq!(find_dll(dir.path()), Some(built));
+        let versioned = dir.path().join("shell").join(env!("CARGO_PKG_VERSION"));
+        std::fs::create_dir_all(&versioned).unwrap();
+        std::fs::write(versioned.join("scrimp_shell.dll"), "").unwrap();
+        assert_eq!(
+            find_dll(dir.path()),
+            Some(versioned.join("scrimp_shell.dll")),
+            "installed wins"
+        );
     }
 
     #[test]

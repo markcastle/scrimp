@@ -1,0 +1,33 @@
+[package]
+name = "scrimp-shell"
+description = "scrimp_shell.dll: Scrimp Compress and Scrimp Decompress in Explorer's right-click menu. It never compresses anything itself; it hands the selection to scrimpw.exe."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "scrimp_shell"
+# The DLL Explorer loads, and a Rust library so the tests can drive the
+# same COM objects directly, standing in for Explorer.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+scrimp-core.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+scrimp-win.workspace = true
+windows-core.workspace = true
+windows = { workspace = true, features = [
+    "Win32_System_LibraryLoader",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell_Common",
+] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

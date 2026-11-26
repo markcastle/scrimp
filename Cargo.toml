@@ -22,17 +22,23 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
 thiserror = "2"
+# The core of Microsoft's bindings, for implementing COM objects (the
+# Explorer menu DLL).
+windows-core = "0.62"
 # Microsoft's own bindings to the Windows API. Only scrimp-win (and later
 # scrimp-shell) use it, and only on Windows.
 windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_Storage_FileSystem",
+    "Win32_System_Com",
     "Win32_System_IO",
     "Win32_System_Ioctl",
+    "Win32_System_Registry",
     "Win32_System_SystemServices",
     "Win32_System_Threading",
     "Win32_System_WindowsProgramming",
+    "Win32_UI_Shell",
 ] }
 
 [workspace.lints.rust]
