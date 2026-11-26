@@ -43,7 +43,8 @@ jobs:
             @{ Name = 'ntfs4k';  Size = 4096; Format = 'fs=ntfs unit=4096';  Letter = 'N' },
             @{ Name = 'ntfs64k'; Size = 512;  Format = 'fs=ntfs unit=65536'; Letter = 'L' },
             @{ Name = 'exfat';   Size = 512;  Format = 'fs=exfat';           Letter = 'X' },
-            @{ Name = 'refs';    Size = 2048; Format = 'fs=refs';            Letter = 'R' }
+            @{ Name = 'refs';    Size = 2048; Format = 'fs=refs';            Letter = 'R' },
+            @{ Name = 'fresh';   Size = 1024; Format = 'fs=ntfs unit=4096';  Letter = 'F' }
           )
           foreach ($v in $volumes) {
             $file = Join-Path $base "$($v.Name).vhdx"
@@ -69,13 +70,15 @@ jobs:
           }
 
       # First run: the runner's own C: drive, where Windows itself already
-      # uses WOF, as a baseline.
+      # uses WOF, as a baseline. F: is a volume WOF is never attached to by
+      # hand, to see whether Windows attaches it by itself.
       - name: 'Run the probe on C: drive'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path 'C:\probe-main' | Out-Null
           & spikes\wof-probe\target\release\wof-probe.exe report-c.md --main 'C:\probe-main' `
-            --volume 'Runner C: drive=C:\'
+            --volume 'Runner C: drive=C:\' `
+            --fresh 'F:\'
 
       # The WOF filter driver may not attach itself to a volume mounted
       # after boot. Attach it to each test volume and log what changed.

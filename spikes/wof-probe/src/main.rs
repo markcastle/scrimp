@@ -39,6 +39,7 @@ fn main() {
     let mut main_dir = None;
     let mut volumes = Vec::new();
     let mut smb = None;
+    let mut fresh_volume = None;
     let mut it = args.iter().skip(1);
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -49,6 +50,7 @@ fn main() {
                 }
             }
             "--smb" => smb = it.next().map(PathBuf::from),
+            "--fresh" => fresh_volume = it.next().map(PathBuf::from),
             other => eprintln!("ignoring {other}"),
         }
     }
@@ -64,6 +66,13 @@ fn main() {
     let _ = writeln!(r, "Windows: `{}`\n", run_text("cmd", &["/c", "ver"]).trim());
     let _ = writeln!(r, "Main test folder: `{}`\n", main_dir.display());
 
+    if let Some(v) = fresh_volume.clone() {
+        section(
+            &mut r,
+            "S0b: does Windows attach WOF to a newly mounted volume by itself?",
+            || s0_attach(&v),
+        );
+    }
     section(&mut r, "S0: does WOF work on this volume at all?", || {
         s0_diagnose(&main_dir)
     });
@@ -330,6 +339,66 @@ fn s0_diagnose(dir: &Path) -> String {
     out
 }
 
+fn wof_attached(root: &Path) -> bool {
+    let letter = root
+        .to_string_lossy()
+        .chars()
+        .next()
+        .unwrap_or('?')
+        .to_ascii_uppercase();
+    run_text("fltmc", &["instances", "-f", "wof"])
+        .lines()
+        .any(|l| l.trim_start().starts_with(&format!("{letter}:")))
+}
+
+fn s0_attach(root: &Path) -> String {
+    let dir = root.join("fresh");
+    let _ = fs::create_dir_all(&dir);
+    let data = text_data(MB);
+    let mut out = String::from(
+        "A volume mounted after boot, never touched by `fltmc attach`. Steps in order.\n\n| Step | Result | WOF attached afterwards |\n| --- | --- | --- |\n",
+    );
+    let _ = writeln!(out, "| Before anything | | {} |", wof_attached(root));
+    let p = fresh(&dir, "a.txt", &data);
+    let r = open(&p, RW, 0).and_then(|h| wof_set_fsctl(&h, wof_id("LZX")));
+    let _ = writeln!(
+        out,
+        "| Our FSCTL, LZX | {} ({}) | {} |",
+        cell(show(&r)),
+        cell(describe_state(&p)),
+        wof_attached(root)
+    );
+    let p = fresh(&dir, "b.txt", &data);
+    let r = open(&p, RW, 0).and_then(|h| wof_set_api(&h, wof_id("LZX"), 0));
+    let _ = writeln!(
+        out,
+        "| Our wofutil call, LZX | {} ({}) | {} |",
+        cell(show(&r)),
+        cell(describe_state(&p)),
+        wof_attached(root)
+    );
+    let p = fresh(&dir, "c.txt", &data);
+    let r = open(&p, RW, 0).and_then(|h| wof_set_fsctl(&h, wof_id("LZX")));
+    let _ = writeln!(
+        out,
+        "| Our FSCTL again, LZX | {} ({}) | {} |",
+        cell(show(&r)),
+        cell(describe_state(&p)),
+        wof_attached(root)
+    );
+    let p = fresh(&dir, "d.txt", &data);
+    let said = run_text("compact", &["/c", "/exe:lzx", &p.to_string_lossy()]);
+    let ok = said.contains("[OK]");
+    let _ = writeln!(
+        out,
+        "| compact /c /exe:lzx | {} ({}) | {} |",
+        if ok { "ok" } else { "failed" },
+        cell(describe_state(&p)),
+        wof_attached(root)
+    );
+    out
+}
+
 // ---------------------------------------------------------------- S1
 
 fn s1_methods(dir: &Path) -> String {
@@ -497,15 +566,20 @@ fn s1_writes(dir: &Path) -> String {
          | Compressed with | Flags | Compress result | State before write | Write | State after write | Size on disk after | Content |\n\
          | --- | --- | --- | --- | --- | --- | --- | --- |\n",
     );
-    let cases: [(&str, u32); 5] = [("LZX", 0), ("XPRESS4K", 0), ("LZX", 1), ("XPRESS8K", 1), ("LZNT1", 0)];
+    let cases: [(&str, u32); 6] = [
+        ("LZX", 0),
+        ("XPRESS4K", 0),
+        ("LZX", 1),
+        ("XPRESS8K", 1),
+        ("LZX", 2),
+        ("LZNT1", 0),
+    ];
     for (alg, flags) in cases {
         let p = fresh(dir, "s1e.txt", &data);
-        let result = open(&p, RW, 0).and_then(|h| {
-            if alg == "LZNT1" {
-                ntfs_set(&h, 2)
-            } else {
-                wof_set_api(&h, wof_id(alg), flags)
-            }
+        let result = open(&p, RW, 0).and_then(|h| match (alg, flags) {
+            ("LZNT1", _) => ntfs_set(&h, 2),
+            (_, 2) => wof_set_fsctl_flags(&h, wof_id(alg), 1),
+            _ => wof_set_api(&h, wof_id(alg), flags),
         });
         let state_before = describe_state(&p);
         let extra = b"Row extra: appended after compression.\n";
@@ -523,7 +597,11 @@ fn s1_writes(dir: &Path) -> String {
         let _ = writeln!(
             out,
             "| {alg} | {} | {} | {} | {} | {} | {} | {content} |",
-            if flags == 1 { "COMPRESS_ON_WRITE" } else { "none" },
+            match flags {
+                1 => "COMPRESS_ON_WRITE (wofutil)",
+                2 => "COMPRESS_ON_WRITE (FSCTL)",
+                _ => "none",
+            },
             cell(show(&result)),
             cell(state_before),
             write.map_or_else(|e| e.to_string(), |_| "ok".into()),

@@ -161,20 +161,22 @@ pub fn wof_name(id: u32) -> &'static str {
     }
 }
 
-/// Compresses through wofutil.dll.
+/// Compresses through wofutil.dll. Note the structure: wofutil takes
+/// WOF_FILE_COMPRESSION_INFO_V1 (Algorithm, Flags), not the
+/// FILE_PROVIDER_EXTERNAL_INFO_V1 (Version, Algorithm, Flags) that the
+/// FSCTL takes. Passing the FSCTL one was the first run's bug.
 pub fn wof_set_api(h: &Handle, algorithm: u32, flags: u32) -> WinResult<()> {
-    let info = FILE_PROVIDER_EXTERNAL_INFO_V1 {
-        Version: FILE_PROVIDER_CURRENT_VERSION,
+    let info = WOF_FILE_COMPRESSION_INFO_V1 {
         Algorithm: algorithm,
         Flags: flags,
     };
-    // SAFETY: `info` is a valid V1 structure for the duration of the call.
+    // SAFETY: `info` is a valid structure for the duration of the call.
     unsafe {
         WofSetFileDataLocation(
             h.0,
             WOF_PROVIDER_FILE,
             &info as *const _ as *const _,
-            std::mem::size_of::<FILE_PROVIDER_EXTERNAL_INFO_V1>() as u32,
+            std::mem::size_of::<WOF_FILE_COMPRESSION_INFO_V1>() as u32,
         )
     }?;
     Ok(())
@@ -190,6 +192,10 @@ pub struct ExternalBacking {
 
 impl ExternalBacking {
     pub fn new(algorithm: u32) -> Self {
+        Self::with_flags(algorithm, 0)
+    }
+
+    pub fn with_flags(algorithm: u32, flags: u32) -> Self {
         ExternalBacking {
             wof: WOF_EXTERNAL_INFO {
                 Version: WOF_CURRENT_VERSION,
@@ -198,7 +204,7 @@ impl ExternalBacking {
             file: FILE_PROVIDER_EXTERNAL_INFO_V1 {
                 Version: FILE_PROVIDER_CURRENT_VERSION,
                 Algorithm: algorithm,
-                Flags: 0,
+                Flags: flags,
             },
         }
     }
@@ -221,7 +227,11 @@ fn ioctl(
 
 /// Compresses through DeviceIoControl, as compact.exe does.
 pub fn wof_set_fsctl(h: &Handle, algorithm: u32) -> WinResult<()> {
-    let input = ExternalBacking::new(algorithm);
+    wof_set_fsctl_flags(h, algorithm, 0)
+}
+
+pub fn wof_set_fsctl_flags(h: &Handle, algorithm: u32, flags: u32) -> WinResult<()> {
+    let input = ExternalBacking::with_flags(algorithm, flags);
     ioctl(
         h,
         FSCTL_SET_EXTERNAL_BACKING,
@@ -294,8 +304,8 @@ pub fn wof_state(path: &Path) -> WinResult<(bool, u32, Option<u32>)> {
     let w = wide(path);
     let mut external = BOOL(0);
     let mut provider = 0u32;
-    let mut info = FILE_PROVIDER_EXTERNAL_INFO_V1::default();
-    let mut len = std::mem::size_of::<FILE_PROVIDER_EXTERNAL_INFO_V1>() as u32;
+    let mut info = WOF_FILE_COMPRESSION_INFO_V1::default();
+    let mut len = std::mem::size_of::<WOF_FILE_COMPRESSION_INFO_V1>() as u32;
     // SAFETY: every out-pointer is a live local; `len` is the buffer size.
     unsafe {
         WofIsExternalFile(
