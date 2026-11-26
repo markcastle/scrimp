@@ -107,7 +107,7 @@ On GitHub, open **Actions**, pick **Release** on the left, press **Run workflow*
 4. Builds `scrimp.exe` for Windows x64, checks it reports the right version, and uploads it to the draft as `scrimp-windows-x64.exe`.
 5. Adds a `SHA256SUMS` file and publishes the release, so "latest" never points at a release with nothing to download.
 
-From 0.3, step 4 also builds the installer, `Scrimp-windows-x64-setup.exe`.
+Step 4 also builds the installer, `Scrimp-windows-x64-setup.exe`, with `scripts/build-installer.sh`.
 
 Tick **Rehearse** to see steps 1 and 2 in the log without anything being pushed, built or published. It is also the way to ask what number the next release would be.
 
@@ -143,8 +143,15 @@ Each release carries:
 
 | File | For |
 | --- | --- |
+| `Scrimp-windows-x64-setup.exe` | The installer: the menu, the worker and the command line, per user |
 | `scrimp-windows-x64.exe` | The command line on its own, for `install.ps1` |
 | `SHA256SUMS` | Checking any of the above arrived intact |
+
+### The installer
+
+`installer/scrimp.nsi`, built by `scripts/build-installer.sh` in CI and in releases. It installs per user to `%LOCALAPPDATA%\Programs\Scrimp`, with the menu DLL in `shell\<version>\`, because Explorer keeps an old one loaded while a new one installs. It then runs `scrimpw.exe --register --add-to-path`, so the menu and PATH rules are Rust code with tests, not NSIS script. Uninstalling runs `--unregister` and leaves the person's settings in `%LOCALAPPDATA%\Scrimp`.
+
+CI's `installer` job runs `scripts/test-installer.ps1`: a silent install into a folder with spaces in its name, a check of every file, registry entry and the PATH, a second install over the top, and an uninstall that must leave PATH exactly as it was.
 
 `install.ps1` asks GitHub for the latest release, downloads `scrimp-windows-x64.exe`, checks it against `SHA256SUMS`, and puts it in `%LOCALAPPDATA%\Programs\Scrimp` as `scrimp.exe`. Running it again updates. It needs no administrator.
 

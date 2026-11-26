@@ -85,6 +85,27 @@ jobs:
       - uses: actions/checkout@v5
       - uses: EmbarkStudios/cargo-deny-action@v2
 
-  # From 0.3 an "installer" job joins here, as in Keevoro: on main and on
-  # demand (not on pull requests) it runs scripts/build-installer.sh and
-  # keeps the installer as a download on the run's page.
+  # Builds the real installer, then installs it silently, checks every
+  # file, registry entry and PATH change, installs again over the top,
+  # uninstalls and checks nothing is left. The installer is kept as a
+  # download on the run's page, so every change has one to try.
+  installer:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: installer
+      - run: scripts/build-installer.sh
+      - name: Install, reinstall and uninstall
+        shell: pwsh
+        run: ./scripts/test-installer.ps1 installers/Scrimp-windows-x64-setup.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Scrimp installer
+          path: installers/*
+          retention-days: 14

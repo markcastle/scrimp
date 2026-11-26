@@ -8,7 +8,7 @@ It isn't an archive format and it doesn't add a compression engine of its own. W
 
 ## Status
 
-Scrimp is in early development. The command line works; the Explorer menu is next. Try it on files you have backed up first.
+Scrimp is in early development. Try it on files you have backed up first.
 
 The plan, including what the first version will and won't do, is in [docs/plan.md](docs/plan.md). The order of work is in [TASKS.md](TASKS.md).
 
@@ -27,7 +27,11 @@ The plan, including what the first version will and won't do, is in [docs/plan.m
 
 ## Install
 
-One line in PowerShell installs the command line. Running it again updates it.
+Download **Scrimp-windows-x64-setup.exe** from the [latest release](https://github.com/markcastle/scrimp/releases/latest) and run it. It needs no administrator. It adds Scrimp Compress and Scrimp Decompress to Explorer's right-click menu (on Windows 11, under Show more options) and the `scrimp` command to new terminal windows.
+
+Scrimp isn't code-signed yet, so Windows may warn you the first time. To remove it, use Installed apps in Settings.
+
+Only want the command line? One line in PowerShell installs just that, and running it again updates it:
 
 ```powershell
 irm https://raw.githubusercontent.com/markcastle/scrimp/main/install.ps1 | iex
