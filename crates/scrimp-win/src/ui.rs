@@ -109,8 +109,9 @@ unsafe extern "system" fn progress_callback(
 }
 
 /// Shows a progress dialog until `poll` says the work is finished. Pressing
-/// Cancel calls `cancel` once and the dialog stays open until then.
-pub fn progress(title: &str, poll: &mut dyn FnMut() -> ProgressView, cancel: &mut dyn FnMut()) {
+/// Cancel calls `cancel` once and the dialog stays open until then. Returns
+/// whether the dialog could be shown at all.
+pub fn progress(title: &str, poll: &mut dyn FnMut() -> ProgressView, cancel: &mut dyn FnMut()) -> bool {
     let first = poll();
     let (title, headline, detail) = (wide(title), wide(&first.headline), wide(&first.detail));
     let mut state = Progress {
@@ -133,7 +134,7 @@ pub fn progress(title: &str, poll: &mut dyn FnMut() -> ProgressView, cancel: &mu
     // SAFETY: `config` and every string it points to live until this call
     // returns, as does `state`, which the callback reaches through
     // `lpCallbackData`.
-    let _ = unsafe { TaskDialogIndirect(&config, None, None, None) };
+    unsafe { TaskDialogIndirect(&config, None, None, None) }.is_ok()
 }
 
 /// A button of a dialog's own, beside its Close or Cancel button.
@@ -265,7 +266,11 @@ mod tests {
     use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, PostMessageW, WM_CLOSE};
 
     /// Waits for the dialog titled `title`, then sends it `press`.
-    fn press_when_shown(title: &'static str, press: impl FnOnce(HWND) + Send + 'static) -> std::thread::JoinHandle<()> {
+    /// Returns whether the dialog was found.
+    fn press_when_shown(
+        title: &'static str,
+        press: impl FnOnce(HWND) + Send + 'static,
+    ) -> std::thread::JoinHandle<bool> {
         std::thread::spawn(move || {
             let wide_title = wide(title);
             let start = Instant::now();
@@ -274,11 +279,13 @@ mod tests {
                 if let Ok(hwnd) = unsafe { FindWindowW(PCWSTR::null(), PCWSTR(wide_title.as_ptr())) } {
                     if !hwnd.is_invalid() {
                         std::thread::sleep(Duration::from_millis(200));
-                        return press(hwnd);
+                        press(hwnd);
+                        return true;
                     }
                 }
                 std::thread::sleep(Duration::from_millis(50));
             }
+            false
         })
     }
 
@@ -308,7 +315,7 @@ mod tests {
             ],
             Finish::Cancel,
         );
-        presser.join().unwrap();
+        assert!(presser.join().unwrap(), "the dialog was never shown");
         assert_eq!(pressed, Some(1));
     }
 
@@ -339,7 +346,7 @@ mod tests {
             }
         };
         let mut cancelled = false;
-        progress("Scrimp ui test: progress", &mut poll, &mut || cancelled = true);
+        assert!(progress("Scrimp ui test: progress", &mut poll, &mut || cancelled = true));
         assert!(polls > 4);
         assert!(!cancelled, "finishing isn't cancelling");
     }
@@ -357,8 +364,10 @@ mod tests {
                 || started.elapsed() > Duration::from_secs(30),
         };
         let mut cancel = || cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
-        progress("Scrimp ui test: cancel progress", &mut poll, &mut cancel);
-        presser.join().unwrap();
+        let shown = progress("Scrimp ui test: cancel progress", &mut poll, &mut cancel);
+        let found = presser.join().unwrap();
+        assert!(shown, "TaskDialogIndirect failed");
+        assert!(found, "the dialog was shown but never found by its title");
         assert!(cancelled.load(std::sync::atomic::Ordering::SeqCst));
     }
 }
