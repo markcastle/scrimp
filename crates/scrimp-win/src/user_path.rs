@@ -67,12 +67,13 @@ fn with_entry(path: &str, folder: &str, expand: &dyn Fn(&str) -> String) -> Opti
     {
         return None;
     }
-    let separator = if path.is_empty() || path.ends_with(';') {
-        ""
-    } else {
-        ";"
-    };
-    Some(format!("{path}{separator}{folder}"))
+    // A PATH that ends with ";" keeps ending with one, so taking Scrimp out
+    // again gives back exactly what was there.
+    Some(match path {
+        "" => folder.to_string(),
+        p if p.ends_with(';') => format!("{p}{folder};"),
+        p => format!("{p};{folder}"),
+    })
 }
 
 /// `path` without `folder`, or `None` if it isn't there. Other entries,
@@ -158,9 +159,17 @@ mod tests {
         assert_eq!(with_entry("", DIR, &fake).unwrap(), DIR, "an empty PATH");
         assert_eq!(
             with_entry(r"C:\Tools;", DIR, &fake).unwrap(),
-            format!(r"C:\Tools;{DIR}"),
-            "a trailing ; is kept as the separator"
+            format!(r"C:\Tools;{DIR};"),
+            "a PATH ending with ; keeps ending with one"
         );
+    }
+
+    #[test]
+    fn adding_then_removing_gives_back_exactly_what_was_there() {
+        for original in [r"C:\Tools", r"C:\Tools;", "", r"%USERPROFILE%\bin;;C:\Tools;"] {
+            let added = with_entry(original, DIR, &fake).unwrap();
+            assert_eq!(without_entry(&added, DIR, &fake).unwrap(), original, "{original:?}");
+        }
     }
 
     #[test]

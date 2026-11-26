@@ -58,8 +58,9 @@ Check ((Value $uninstallKey 'DisplayVersion') -eq $version) "Installed apps show
 Check ((Value $uninstallKey 'QuietUninstallString') -like '*uninstall.exe" /S') "Installed apps can uninstall quietly"
 
 $afterInstall = UserPath
-$expected = if ($before.Value -eq '' -or $before.Value.EndsWith(';')) { "$($before.Value)$dir" } else { "$($before.Value);$dir" }
+$expected = if ($before.Value -eq '') { $dir } elseif ($before.Value.EndsWith(';')) { "$($before.Value)$dir;" } else { "$($before.Value);$dir" }
 Check ($afterInstall.Value -eq $expected) "PATH gained exactly one entry, at the end, and nothing else changed"
+if ($afterInstall.Value -ne $expected) { Write-Host "expected: [$expected]"; Write-Host "got:      [$($afterInstall.Value)]" }
 if ($before.Kind -ne 'None') {
     Check ($afterInstall.Kind -eq $before.Kind) "PATH kept its type ($($before.Kind))"
 }
@@ -74,6 +75,7 @@ $p = Start-Process -FilePath "$dir\uninstall.exe" -ArgumentList '/S', "_?=$dir" 
 Check ($p.ExitCode -eq 0) "the uninstaller finished cleanly"
 $afterUninstall = UserPath
 Check ($afterUninstall.Value -eq $before.Value) "PATH is exactly as it was before"
+if ($afterUninstall.Value -ne $before.Value) { Write-Host "before: [$($before.Value)]"; Write-Host "after:  [$($afterUninstall.Value)]" }
 Check ($afterUninstall.Kind -eq $before.Kind) "PATH has its original type"
 Check ($null -eq (Value "$compressClass\InprocServer32" '')) "the menu's class is gone"
 Check ($null -eq (Value $compressVerb 'ExplorerCommandHandler')) "the file menu entry is gone"
