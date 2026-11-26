@@ -254,3 +254,111 @@ pub fn ask(
 pub fn message(title: &str, headline: &str, body: &str, details: Option<&str>) {
     ask(title, headline, body, details, &[], Finish::Close);
 }
+
+#[cfg(test)]
+mod tests {
+    //! The dialogs shown for real and pressed through Windows' own
+    //! messages, the way a person's click arrives.
+
+    use super::*;
+    use std::time::{Duration, Instant};
+    use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, PostMessageW, WM_CLOSE};
+
+    /// Waits for the dialog titled `title`, then sends it `press`.
+    fn press_when_shown(title: &'static str, press: impl FnOnce(HWND) + Send + 'static) -> std::thread::JoinHandle<()> {
+        std::thread::spawn(move || {
+            let wide_title = wide(title);
+            let start = Instant::now();
+            while start.elapsed() < Duration::from_secs(20) {
+                // SAFETY: `wide_title` is NUL-terminated and outlives the call.
+                if let Ok(hwnd) = unsafe { FindWindowW(PCWSTR::null(), PCWSTR(wide_title.as_ptr())) } {
+                    if !hwnd.is_invalid() {
+                        std::thread::sleep(Duration::from_millis(200));
+                        return press(hwnd);
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        })
+    }
+
+    fn click(hwnd: HWND, id: i32) {
+        // SAFETY: `hwnd` is the dialog found by its title; posting a message
+        // passes no pointers.
+        let _ = unsafe { PostMessageW(Some(hwnd), TDM_CLICK_BUTTON.0 as u32, WPARAM(id as usize), LPARAM(0)) };
+    }
+
+    #[test]
+    fn pressing_a_dialogs_own_button_says_which() {
+        let presser = press_when_shown("Scrimp ui test: own button", |hwnd| click(hwnd, FIRST_BUTTON + 1));
+        let pressed = ask(
+            "Scrimp ui test: own button",
+            "Headline",
+            "Body",
+            Some("Details"),
+            &[
+                Button {
+                    text: "First",
+                    needs_admin: false,
+                },
+                Button {
+                    text: "Second",
+                    needs_admin: true,
+                },
+            ],
+            Finish::Cancel,
+        );
+        presser.join().unwrap();
+        assert_eq!(pressed, Some(1));
+    }
+
+    #[test]
+    fn closing_a_message_is_not_a_choice() {
+        let presser = press_when_shown("Scrimp ui test: close", |hwnd| {
+            // SAFETY: as in `click`.
+            let _ = unsafe { PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0)) };
+        });
+        message("Scrimp ui test: close", "Headline", "Body", None);
+        presser.join().unwrap();
+
+        let presser = press_when_shown("Scrimp ui test: cancel", |hwnd| click(hwnd, IDCANCEL as i32));
+        let pressed = ask("Scrimp ui test: cancel", "Headline", "", None, &[], Finish::Cancel);
+        presser.join().unwrap();
+        assert_eq!(pressed, None);
+    }
+
+    #[test]
+    fn progress_follows_the_work_and_closes_itself_when_done() {
+        let mut polls = 0;
+        let mut poll = || {
+            polls += 1;
+            ProgressView {
+                headline: format!("Compressing Games ({polls})"),
+                detail: format!("{polls} files done."),
+                finished: polls > 4,
+            }
+        };
+        let mut cancelled = false;
+        progress("Scrimp ui test: progress", &mut poll, &mut || cancelled = true);
+        assert!(polls > 4);
+        assert!(!cancelled, "finishing isn't cancelling");
+    }
+
+    #[test]
+    fn cancel_asks_the_work_to_stop_and_waits_for_it() {
+        let presser = press_when_shown("Scrimp ui test: cancel progress", |hwnd| click(hwnd, IDCANCEL as i32));
+        let cancelled = std::sync::atomic::AtomicBool::new(false);
+        let started = Instant::now();
+        let mut poll = || ProgressView {
+            headline: "Compressing Games".into(),
+            detail: String::new(),
+            // Finishes a little after Cancel, as the file in progress would.
+            finished: cancelled.load(std::sync::atomic::Ordering::SeqCst)
+                || started.elapsed() > Duration::from_secs(30),
+        };
+        let mut cancel = || cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
+        progress("Scrimp ui test: cancel progress", &mut poll, &mut cancel);
+        presser.join().unwrap();
+        assert!(cancelled.load(std::sync::atomic::Ordering::SeqCst));
+    }
+}
