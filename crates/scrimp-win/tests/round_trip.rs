@@ -18,6 +18,13 @@ use scrimp_win::{DriveType, Error, compress, decompress, inspect, volume};
 
 const MB: usize = 1024 * 1024;
 
+/// Skips a test that needs something this computer may not have, but never
+/// on CI, where GitHub's runners have it and a skip would hide a failure.
+fn skip(why: &str) {
+    assert!(std::env::var_os("CI").is_none(), "this must run on CI, but {why}");
+    eprintln!("skipped: {why}");
+}
+
 /// Repetitive text that compresses well. Made up, as all examples are.
 fn text(len: usize) -> Vec<u8> {
     let mut out = Vec::with_capacity(len + 100);
@@ -255,7 +262,7 @@ fn links_are_never_followed() {
     // Creating a link needs Developer Mode or an administrator. GitHub's
     // runners are administrators; skip elsewhere rather than fail.
     if std::os::windows::fs::symlink_file(&target, &link).is_err() {
-        eprintln!("skipped: this account can't create symbolic links");
+        skip("this account can't create symbolic links");
         return;
     }
     assert_eq!(
@@ -277,7 +284,7 @@ fn encrypted_files_are_left_alone() {
     let p = file(dir.path(), "secret.txt", &data);
     let encrypted = Command::new("cipher").arg("/e").arg(&p).output();
     if !encrypted.is_ok_and(|o| o.status.success()) || inspect(&p).unwrap().state == CompressionState::Uncompressed {
-        eprintln!("skipped: EFS isn't available here");
+        skip("EFS isn't available here");
         return;
     }
     assert_eq!(

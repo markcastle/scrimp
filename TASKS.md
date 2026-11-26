@@ -30,15 +30,16 @@ Findings are in [docs/windows-api.md](docs/windows-api.md).
 
 Each of these follows [docs/windows-api.md](docs/windows-api.md).
 
-- [ ] `scrimp-win`: inspect a file's compression state and sizes (`WofIsExternalFile` with `WOF_FILE_COMPRESSION_INFO_V1`, `FSCTL_GET_COMPRESSION`, `GetCompressedFileSizeW`); a file with both WOF and NTFS compression reads as unknown
-- [ ] `scrimp-win`: compress with each WOF algorithm through `WofSetFileDataLocation`, opening with `GENERIC_READ` only, with a test that reads each algorithm back
-- [ ] `scrimp-win`: NTFS compression, clearing and restoring read-only, and undoing it when nothing was saved
-- [ ] `scrimp-win`: remove NTFS compression before applying WOF
-- [ ] `scrimp-win`: decompress both kinds, with read-only access for WOF
-- [ ] `scrimp-win`: volume capabilities from the filesystem name and cluster size, never from error codes alone (ReFS answers "would not save space")
-- [ ] `scrimp-win`: recognise "WOF isn't running on this drive" (error 1 on NTFS) and stop trying WOF there for the rest of the job
-- [ ] VHDX fixture volumes created in CI
-- [ ] Round-trip tests: every algorithm and every change between algorithms leaves files byte-for-byte identical
+- [x] `scrimp-win`: inspect a file's compression state and sizes (`WofIsExternalFile` with `WOF_FILE_COMPRESSION_INFO_V1`, `FSCTL_GET_COMPRESSION`, `GetCompressedFileSizeW`); a file with both WOF and NTFS compression reads as unknown
+- [x] `scrimp-win`: compress with each WOF algorithm through `WofSetFileDataLocation`, opening with `GENERIC_READ` only, with a test that reads each algorithm back
+- [x] `scrimp-win`: NTFS compression, clearing and restoring read-only, and undoing it when nothing was saved
+- [x] `scrimp-win`: remove NTFS compression before applying WOF
+- [x] `scrimp-win`: decompress both kinds, with read-only access for WOF
+- [x] `scrimp-win`: volume capabilities from the filesystem name and cluster size, never from error codes alone (ReFS answers "would not save space")
+- [x] `scrimp-win`: recognise "WOF isn't running on this drive" (error 1 from a WOF call becomes `Error::WofUnavailable`)
+- [ ] Engine: stop trying WOF on a drive for the rest of the job after `WofUnavailable`, and offer NTFS compression instead (Phase 2)
+- [x] Round-trip tests on the system drive: every algorithm and every change between algorithms leaves files byte-for-byte identical
+- [ ] VHDX fixture volumes in CI (64 KB clusters, exFAT, ReFS), with `scrimp-win` tests against each
 
 ## Phase 2: Compression engine
 
