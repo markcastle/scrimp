@@ -295,6 +295,10 @@ jobs:
             exit 1
           fi
 
+      # Nothing but Windows: no Visual C++ redistributable, no other runtime.
+      - name: Check it needs nothing but Windows
+        run: cargo xtask imports "$ASSET"
+
       - name: Upload to the draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -324,6 +328,9 @@ jobs:
         env:
           SCRIMP_VERSION: ${{ needs.prepare.outputs.version }}
         run: scripts/build-installer.sh
+
+      - name: Check what it installs needs nothing but Windows
+        run: cargo xtask imports target/release/scrimp.exe target/release/scrimpw.exe target/release/scrimp_shell.dll
 
       - name: Upload to the draft release
         env:
