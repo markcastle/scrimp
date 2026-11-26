@@ -1,0 +1,22 @@
+[package]
+name = "scrimp-win"
+description = "Safe wrappers over the Windows file compression, file and volume calls Scrimp uses. The only crate besides the menu DLL allowed `unsafe`."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+scrimp-core.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
