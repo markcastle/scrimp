@@ -1,0 +1,20 @@
+[package]
+name = "scrimp-cli"
+description = "scrimp.exe: everything Scrimp does from Explorer, from the command line."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "scrimp"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+scrimp-core.workspace = true
+
+[lints]
+workspace = true

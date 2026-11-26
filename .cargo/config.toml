@@ -1,0 +1,10 @@
+# `cargo xtask <command>` runs the project's own tooling (crates/xtask):
+# the changelog and the release cut. See docs/developing.md.
+[alias]
+xtask = "run --quiet -p xtask --"
+
+# Build the C runtime in, so Scrimp runs on a PC that has never had Visual
+# Studio's redistributable installed. Set here rather than only for
+# releases, so what is tested is what ships.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

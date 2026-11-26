@@ -1,0 +1,30 @@
+# cargo deny: the rules every dependency must meet. CI runs it on every change.
+
+[advisories]
+# Any crate with a known security advisory fails the build.
+yanked = "deny"
+
+[licenses]
+# Licences compatible with shipping Scrimp under MIT. Add one here only
+# after reading it.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Path dependencies inside this workspace have no version, which is fine.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

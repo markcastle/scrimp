@@ -1,0 +1,6 @@
+/target
+*.profraw
+lcov.info
+Thumbs.db
+.DS_Store
+/installers

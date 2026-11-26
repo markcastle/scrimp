@@ -1,0 +1,15 @@
+[package]
+name = "scrimp-core"
+description = "The rules behind Scrimp: compression methods, file states and outcomes. Pure Rust, no Windows calls, so it is tested on any computer."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+thiserror.workspace = true
+
+[lints]
+workspace = true
