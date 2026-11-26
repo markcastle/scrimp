@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0] - 2026-11-26
+
 ### Added
 
 - **A software bill of materials with every release**: one for each program, listing every component in it with its version and licence, for anyone checking Scrimp against a security advisory.
@@ -37,6 +41,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - **For scripts:** `--json` output, `--dry-run`, `--workers`, and documented exit codes. See [docs/command-line.md](docs/command-line.md).
 - **Settings** in `%LOCALAPPDATA%\Scrimp\settings.json`: the default method, the smallest file worth compressing, what to do with files that change often, and per-extension choices.
 
-[Unreleased]: https://github.com/markcastle/scrimp/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/markcastle/scrimp/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/markcastle/scrimp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/markcastle/scrimp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/markcastle/scrimp/releases/tag/v0.1.0
