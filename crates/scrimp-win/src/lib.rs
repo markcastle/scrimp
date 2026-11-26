@@ -30,6 +30,8 @@ mod error;
 pub use error::Error;
 
 #[cfg(windows)]
+mod disk;
+#[cfg(windows)]
 mod ffi;
 #[cfg(windows)]
 mod file;
@@ -38,6 +40,8 @@ mod path;
 #[cfg(windows)]
 mod volume;
 
+#[cfg(windows)]
+pub use disk::WindowsDisk;
 #[cfg(windows)]
 pub use file::{FileInfo, compress, decompress, inspect};
 #[cfg(windows)]

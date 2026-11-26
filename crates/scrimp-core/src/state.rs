@@ -40,6 +40,9 @@ pub enum UnsupportedReason {
     /// Another special kind of file Windows manages itself, such as a
     /// deduplicated one.
     SpecialFile,
+    /// Windows' compression driver (WOF) isn't running on this drive, which
+    /// happens with a VHDX mounted after boot. NTFS compression still works.
+    WofNotRunning,
 }
 
 impl CompressionState {
@@ -87,6 +90,7 @@ mod tests {
             UnsupportedReason::CloudPlaceholder,
             UnsupportedReason::Link,
             UnsupportedReason::SpecialFile,
+            UnsupportedReason::WofNotRunning,
         ] {
             assert!(!CompressionState::Unsupported(reason).can_change());
         }

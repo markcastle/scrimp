@@ -37,20 +37,22 @@ Each of these follows [docs/windows-api.md](docs/windows-api.md).
 - [x] `scrimp-win`: decompress both kinds, with read-only access for WOF
 - [x] `scrimp-win`: volume capabilities from the filesystem name and cluster size, never from error codes alone (ReFS answers "would not save space")
 - [x] `scrimp-win`: recognise "WOF isn't running on this drive" (error 1 from a WOF call becomes `Error::WofUnavailable`)
-- [ ] Engine: stop trying WOF on a drive for the rest of the job after `WofUnavailable`, and offer NTFS compression instead (Phase 2)
+- [x] Engine: stop trying WOF on a drive for the rest of the job after `WofUnavailable`, and say NTFS compression still works there
 - [x] Round-trip tests on the system drive: every algorithm and every change between algorithms leaves files byte-for-byte identical
 - [x] VHDX test drives in CI (64 KB clusters, exFAT, ReFS, and NTFS with and without WOF attached), with `scrimp-win` tests against each
 
 ## Phase 2: Compression engine
 
 - [x] Automatic policy table, with change-prone and already-compressed skipping, protected Windows folders and per-extension overrides (`scrimp-core::policy`)
-- [ ] Streaming enumeration that never follows reparse points and counts hardlinks once
-- [ ] Scheduler: per-volume worker limits, bounded queue, pause and cancel between files
+- [x] Streaming enumeration that never follows links and handles a hardlinked file once (`scrimp-core::engine`)
+- [x] Scheduler: per-drive worker limits (spinning disk 1, SSD 4), bounded queues, pause and cancel between files
 - [x] Reports built from outcomes, in the plain words of the plan, with sizes as Explorer shows them (`scrimp-core::report`)
 - [x] Free-space check for decompression, keeping the larger of 1 GB or 2% free (`scrimp-core::space`)
-- [ ] Engine: run the free-space check before decompressing and again between files
+- [x] Engine: check there is room before decompressing each file
 
 ## Phase 3: Command line, released as 0.1
+
+- [ ] Settings file: `settings.json` read and validated, feeding the policy and worker limits
 
 - [ ] `scrimp compress`, `decompress`, `inspect` and `analyse`
 - [ ] `--json` output and documented exit codes
