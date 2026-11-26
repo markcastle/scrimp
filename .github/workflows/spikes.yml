@@ -1,0 +1,98 @@
+name: Phase 0 probe
+
+# Runs spikes/wof-probe on a real Windows machine against small test
+# volumes, and posts what Windows did as a comment on the pull request.
+# Findings are written up in docs/windows-api.md. Throwaway: this workflow
+# goes once Phase 0 is answered.
+
+on:
+  pull_request:
+    paths:
+      - 'spikes/**'
+      - '.github/workflows/spikes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: spikes/wof-probe
+
+      - name: Build the probe
+        working-directory: spikes/wof-probe
+        run: cargo build --release
+
+      # Small VHDX files, mounted as drives: NTFS with 4 KB clusters (the
+      # main test volume), NTFS with 64 KB clusters, exFAT and ReFS. Each is
+      # made separately so one that fails doesn't stop the others.
+      - name: Make the test volumes
+        shell: pwsh
+        run: |
+          $base = if (Test-Path 'D:\') { 'D:\vhd' } else { 'C:\vhd' }
+          New-Item -ItemType Directory -Force -Path $base | Out-Null
+          $volumes = @(
+            @{ Name = 'ntfs4k';  Size = 4096; Format = 'fs=ntfs unit=4096';  Letter = 'N' },
+            @{ Name = 'ntfs64k'; Size = 512;  Format = 'fs=ntfs unit=65536'; Letter = 'L' },
+            @{ Name = 'exfat';   Size = 512;  Format = 'fs=exfat';           Letter = 'X' },
+            @{ Name = 'refs';    Size = 2048; Format = 'fs=refs';            Letter = 'R' }
+          )
+          foreach ($v in $volumes) {
+            $file = Join-Path $base "$($v.Name).vhdx"
+            $script = Join-Path $base "$($v.Name).txt"
+            @(
+              "create vdisk file=`"$file`" maximum=$($v.Size) type=expandable",
+              "select vdisk file=`"$file`"",
+              "attach vdisk",
+              "convert mbr",
+              "create partition primary",
+              "format $($v.Format) quick label=$($v.Name)",
+              "assign letter=$($v.Letter)"
+            ) | Set-Content -Encoding ascii $script
+            diskpart /s $script | Out-String | Write-Host
+            if (Test-Path "$($v.Letter):\") { Write-Host "$($v.Name) is $($v.Letter):" } else { Write-Host "::warning::$($v.Name) could not be made" }
+          }
+          New-Item -ItemType Directory -Force -Path 'N:\probe', 'N:\share' | Out-Null
+          try {
+            New-SmbShare -Name scrimpprobe -Path 'N:\share' -FullAccess 'Everyone' | Out-Null
+            Write-Host 'Shared N:\share as \\localhost\scrimpprobe'
+          } catch {
+            Write-Host "::warning::Could not make the SMB share: $_"
+          }
+
+      - name: Run the probe
+        shell: pwsh
+        run: |
+          $probe = 'spikes\wof-probe\target\release\wof-probe.exe'
+          & $probe report.md --main 'N:\probe' `
+            --volume 'Runner C: drive=C:\' `
+            --volume 'NTFS 4 KB clusters=N:\' `
+            --volume 'NTFS 64 KB clusters=L:\' `
+            --volume 'exFAT=X:\' `
+            --volume 'ReFS=R:\' `
+            --smb '\\localhost\scrimpprobe'
+          Get-Content report.md | Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: probe-report
+          path: report.md
+          if-no-files-found: ignore
+
+      - name: Post the report on the pull request
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          head -c 65000 report.md > comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body-file comment.md
