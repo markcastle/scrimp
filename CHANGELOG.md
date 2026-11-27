@@ -6,7 +6,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Sampling for files Scrimp doesn't recognise.** A large file of an unfamiliar kind is now tested first: Scrimp compresses three small pieces of it in memory, and leaves it alone if they don't shrink. Game archives and disk images that are compressed already are passed over in milliseconds instead of being compressed for nothing. The file itself is never changed by this, and choosing a method yourself skips it.
 
 ## [0.3.0] - 2026-11-26
 

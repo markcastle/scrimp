@@ -22,8 +22,8 @@ mod state;
 
 pub use algorithm::{Algorithm, ParseError, Target};
 pub use engine::{
-    Analysis, Control, Disk, DiskError, EntryKind, Event, FileFacts, FileId, Group, Job, Preview, StateGroup, Storage,
-    VolumeFacts, Workers, analyse, run,
+    Analysis, Control, Disk, DiskError, EntryKind, Event, FileFacts, FileId, Group, Job, Preview, Sampled, StateGroup,
+    Storage, VolumeFacts, Workers, analyse, run,
 };
 pub use job::{
     Action, JOB_SCHEMA_VERSION, JobError, JobRequest, admin_jobs_folder, has_waiting, jobs_folder, take_next,

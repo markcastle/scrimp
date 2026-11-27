@@ -12,7 +12,11 @@
 //! 3. **Already compressed** photos, videos and archives are skipped.
 //! 4. **Text and source code** get LZX, the smallest.
 //! 5. **Programs and libraries** get XPRESS16K.
-//! 6. **Everything else** gets XPRESS8K.
+//! 6. **Everything else** gets XPRESS8K, but only if a sample of it shrinks.
+//!    A file of a kind Scrimp doesn't know may well be compressed already
+//!    (game archives, disk images, encrypted containers), and compressing
+//!    a large one only to find it didn't shrink wastes minutes. So files of
+//!    1 MB or more are sampled first ([`Plan::Sample`]).
 //!
 //! Rules 2 to 6 only apply in automatic mode. Choosing a method yourself
 //! always wins over them, but never over rule 1.
@@ -32,6 +36,9 @@ use crate::state::CompressionState;
 pub enum Plan {
     /// Compress it with this method.
     Compress(Algorithm),
+    /// Compress it with this method if a sample of it shrinks: automatic
+    /// mode's choice for a large file whose kind gives no clue.
+    Sample(Algorithm),
     /// Remove its compression.
     Decompress,
     /// It is already as asked; leave it.
@@ -82,6 +89,11 @@ const TEXT: &[&str] = &[
 
 /// Programs and libraries.
 const PROGRAMS: &[&str] = &["exe", "dll", "sys", "ocx", "pdb", "lib", "obj", "node"];
+
+/// Files of an unknown kind this size or larger are sampled before they're
+/// compressed. Below it, compressing is quick enough that a sample saves
+/// nothing: Windows itself refuses a file that wouldn't shrink.
+pub const SAMPLE_FROM: u64 = 1024 * 1024;
 
 /// File names at a drive's root that belong to Windows.
 const WINDOWS_FILES: &[&str] = &["pagefile.sys", "hiberfil.sys", "swapfile.sys"];
@@ -169,50 +181,55 @@ impl Policy {
                     Plan::AlreadyDone
                 };
             }
-            Target::Algorithm(a) => a,
+            Target::Algorithm(a) => (a, false),
             // Automatic mode leaves a file that is already compressed as it
             // is, rather than spending time recompressing it.
             Target::Automatic if state.is_compressed() => return Plan::AlreadyDone,
             Target::Automatic => match self.choose(path) {
-                Ok(a) => a,
+                Ok(chosen) => chosen,
                 Err(reason) => return Plan::Skip(reason),
             },
         };
+        let (algorithm, unknown_kind) = algorithm;
         if logical < self.minimum_size {
             return Plan::Skip(SkipReason::TooSmall);
         }
         if state.already_is(Target::Algorithm(algorithm)) {
             return Plan::AlreadyDone;
         }
+        if unknown_kind && logical >= SAMPLE_FROM {
+            return Plan::Sample(algorithm);
+        }
         Plan::Compress(algorithm)
     }
 
-    /// Rules 2 to 6: the method automatic mode picks for a file's type.
-    fn choose(&self, path: &Path) -> Result<Algorithm, SkipReason> {
+    /// Rules 2 to 6: the method automatic mode picks for a file's type, and
+    /// whether that was rule 6, for a kind of file it doesn't know.
+    fn choose(&self, path: &Path) -> Result<(Algorithm, bool), SkipReason> {
         let extension = extension(path);
         let is = |list: &[&str]| list.contains(&extension.as_str());
         if let Some(choice) = self.overrides.get(&extension) {
             return match choice {
-                Choice::Use(a) => Ok(*a),
+                Choice::Use(a) => Ok((*a, false)),
                 Choice::Skip => Err(SkipReason::AlreadyCompressedFormat),
             };
         }
         if is(CHANGES_OFTEN) {
             return match self.changes_often {
                 ChangesOften::Skip => Err(SkipReason::ChangesOften),
-                ChangesOften::UseNtfs => Ok(Algorithm::Lznt1),
+                ChangesOften::UseNtfs => Ok((Algorithm::Lznt1, false)),
             };
         }
         if is(ALREADY_COMPRESSED) {
             return Err(SkipReason::AlreadyCompressedFormat);
         }
         if is(TEXT) {
-            return Ok(Algorithm::Lzx);
+            return Ok((Algorithm::Lzx, false));
         }
         if is(PROGRAMS) {
-            return Ok(Algorithm::Xpress16k);
+            return Ok((Algorithm::Xpress16k, false));
         }
-        Ok(Algorithm::Xpress8k)
+        Ok((Algorithm::Xpress8k, true))
     }
 }
 
@@ -420,5 +437,56 @@ mod tests {
         assert_eq!(extension(Path::new(r"D:\Archive\.gitignore")), "");
         assert_eq!(extension(Path::new(r"D:\Archive\Old.Tar.GZ")), "gz");
         assert_eq!(normalise_extension(" .BAK "), "bak");
+    }
+
+    #[test]
+    fn large_files_of_an_unknown_kind_are_sampled_first() {
+        let p = Policy::default();
+        let plan = |path: &str, size| {
+            p.plan(
+                Path::new(path),
+                &CompressionState::Uncompressed,
+                size,
+                Target::Automatic,
+            )
+        };
+        let big = 4 * SAMPLE_FROM;
+        assert_eq!(
+            plan(r"D:\Games\Example\Example.pak", big),
+            Plan::Sample(Algorithm::Xpress8k)
+        );
+        assert_eq!(plan(r"D:\Games\Example\README", big), Plan::Sample(Algorithm::Xpress8k));
+        assert_eq!(
+            plan(r"D:\Games\Example\Example.pak", SAMPLE_FROM - 1),
+            Plan::Compress(Algorithm::Xpress8k),
+            "small enough that Windows' own check is quicker"
+        );
+        // Kinds Scrimp knows aren't sampled: it already knows they shrink.
+        assert_eq!(
+            plan(r"D:\Games\Example\game.exe", big),
+            Plan::Compress(Algorithm::Xpress16k)
+        );
+        assert_eq!(plan(r"D:\Archive\notes.txt", big), Plan::Compress(Algorithm::Lzx));
+        // A method someone chose is never second-guessed.
+        assert_eq!(
+            p.plan(
+                Path::new(r"D:\Games\Example\Example.pak"),
+                &CompressionState::Uncompressed,
+                big,
+                Target::Algorithm(Algorithm::Lzx)
+            ),
+            Plan::Compress(Algorithm::Lzx)
+        );
+        // Nor is a method set for an extension in settings.
+        let chosen = Policy::default().with_override("pak", Choice::Use(Algorithm::Lzx));
+        assert_eq!(
+            chosen.plan(
+                Path::new(r"D:\Games\Example\Example.pak"),
+                &CompressionState::Uncompressed,
+                big,
+                Target::Automatic
+            ),
+            Plan::Compress(Algorithm::Lzx)
+        );
     }
 }

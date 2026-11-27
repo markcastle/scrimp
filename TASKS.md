@@ -90,7 +90,7 @@ Each of these follows [docs/windows-api.md](docs/windows-api.md).
 
 - [x] A winget manifest with each release (`cargo xtask winget`), checked against winget's schemas
 - [ ] The first version submitted to microsoft/winget-pkgs (a person's pull request; docs/developing.md)
-- [ ] Sampling in automatic mode: skip files whose samples won't shrink
+- [x] Sampling in automatic mode: large files of an unknown kind are skipped if three samples won't shrink
 - [ ] Code signing, then Windows 11's first menu
 
 ## Tried by a person

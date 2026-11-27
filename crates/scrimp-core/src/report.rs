@@ -124,7 +124,7 @@ impl Group {
 
     fn of_skip(reason: &SkipReason) -> Option<Group> {
         Some(match reason {
-            SkipReason::AlreadyCompressedFormat => Group::AlreadySmall,
+            SkipReason::AlreadyCompressedFormat | SkipReason::WontShrink => Group::AlreadySmall,
             SkipReason::ChangesOften => Group::ChangesOften,
             SkipReason::TooSmall => Group::TooSmall,
             SkipReason::ProtectedLocation | SkipReason::WimBacked => Group::Windows,

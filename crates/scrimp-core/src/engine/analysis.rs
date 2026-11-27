@@ -64,6 +64,11 @@ impl<D: Disk> Disk for Preview<'_, D> {
     fn compress(&self, path: &Path, _: Algorithm) -> Result<FileFacts, DiskError> {
         self.inner.inspect(path)
     }
+    /// Sampling only reads, so a preview samples for real, and shows what a
+    /// real run would leave alone.
+    fn sample(&self, path: &Path) -> Result<super::Sampled, DiskError> {
+        self.inner.sample(path)
+    }
     fn decompress(&self, path: &Path) -> Result<FileFacts, DiskError> {
         self.inner.inspect(path)
     }

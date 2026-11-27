@@ -33,6 +33,9 @@ struct FakeDisk {
     /// Drives where WOF reports that its driver isn't running.
     no_wof_driver: HashSet<String>,
     compress_calls: AtomicUsize,
+    sample_calls: AtomicUsize,
+    /// Every sample fails, as when a file can't be read.
+    samples_fail: bool,
     delay: Option<Duration>,
     /// Presses Cancel in the middle of this numbered compression.
     cancel_during: Option<(usize, Arc<Control>)>,
@@ -222,6 +225,19 @@ impl Disk for FakeDisk {
             n.state = CompressionState::Compressed(algorithm);
             n.on_disk = n.logical / 2;
         }))
+    }
+
+    fn sample(&self, path: &Path) -> Result<Sampled, DiskError> {
+        self.sample_calls.fetch_add(1, Ordering::SeqCst);
+        if self.samples_fail {
+            return Err(DiskError::Failed(FailReason::InUse));
+        }
+        let read = 3 * 64 * 1024;
+        let incompressible = self.nodes.lock().unwrap()[path].incompressible;
+        Ok(Sampled {
+            read,
+            compressed: if incompressible { read } else { read / 2 },
+        })
     }
 
     fn decompress(&self, path: &Path) -> Result<FileFacts, DiskError> {
@@ -777,4 +793,113 @@ fn a_virtual_disk_is_named_once_and_the_summary_is_honest_about_its_file() {
 
     let (_, events, _) = simple(&disk, &["D:/Games"], Target::Automatic);
     assert!(!events.iter().any(|e| matches!(e, Event::VirtualDisk { .. })));
+}
+
+#[test]
+fn large_files_of_an_unknown_kind_are_sampled_and_skipped_if_they_wont_shrink() {
+    let big = 4 * crate::policy::SAMPLE_FROM;
+    let disk = FakeDisk::new();
+    disk.put(
+        "D:/Games/Example.pak",
+        Node {
+            logical: big,
+            on_disk: big,
+            incompressible: true,
+            ..blank()
+        },
+    );
+    disk.file("D:/Games/levels.bin", big);
+    disk.file("D:/Games/small.bin", 100_000);
+    disk.file("D:/Games/game.exe", big);
+    let (outcomes, _, report) = simple(&disk, &["D:/Games"], Target::Automatic);
+
+    assert_eq!(
+        outcomes["D:/Games/Example.pak"],
+        Outcome::Skipped(SkipReason::WontShrink)
+    );
+    assert_eq!(
+        compressed_with(&outcomes["D:/Games/levels.bin"]),
+        Some(Algorithm::Xpress8k)
+    );
+    assert!(compressed_with(&outcomes["D:/Games/small.bin"]).is_some());
+    assert_eq!(
+        compressed_with(&outcomes["D:/Games/game.exe"]),
+        Some(Algorithm::Xpress16k)
+    );
+    assert_eq!(
+        disk.sample_calls.load(Ordering::SeqCst),
+        2,
+        "only the two large unknown files"
+    );
+    assert_eq!(
+        disk.compress_calls.load(Ordering::SeqCst),
+        3,
+        "the one that won't shrink is never compressed"
+    );
+    assert!(
+        report
+            .summary(None)
+            .contains(&"1 file is already as small as it can be.".to_string()),
+        "{:?}",
+        report.summary(None)
+    );
+}
+
+#[test]
+fn a_sample_that_cant_be_taken_never_stops_a_file_being_compressed() {
+    let big = 4 * crate::policy::SAMPLE_FROM;
+    let mut disk = FakeDisk::new();
+    disk.samples_fail = true;
+    disk.file("D:/Games/levels.bin", big);
+    let (outcomes, _, _) = simple(&disk, &["D:/Games"], Target::Automatic);
+    assert_eq!(
+        compressed_with(&outcomes["D:/Games/levels.bin"]),
+        Some(Algorithm::Xpress8k)
+    );
+}
+
+#[test]
+fn a_chosen_method_is_never_sampled() {
+    let big = 4 * crate::policy::SAMPLE_FROM;
+    let disk = FakeDisk::new();
+    disk.file("D:/Games/levels.bin", big);
+    let (outcomes, _, _) = simple(&disk, &["D:/Games"], Target::Algorithm(Algorithm::Lzx));
+    assert_eq!(compressed_with(&outcomes["D:/Games/levels.bin"]), Some(Algorithm::Lzx));
+    assert_eq!(disk.sample_calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn analysis_samples_too_so_it_promises_only_what_compressing_would_do() {
+    let big = 4 * crate::policy::SAMPLE_FROM;
+    let disk = FakeDisk::new();
+    disk.put(
+        "D:/Games/Example.pak",
+        Node {
+            logical: big,
+            on_disk: big,
+            incompressible: true,
+            ..blank()
+        },
+    );
+    disk.file("D:/Games/levels.bin", big);
+    let a = analyse(
+        &[PathBuf::from("D:/Games")],
+        &Policy::default(),
+        &Workers::default(),
+        &disk,
+        &Control::new(),
+        |_| {},
+    );
+    assert_eq!(a.would_compress.files, 1);
+    assert_eq!(a.would_compress.logical, big);
+}
+
+#[test]
+fn samples_shrink_only_by_five_percent_or_more() {
+    let s = |read, compressed| Sampled { read, compressed }.shrinks();
+    assert!(s(1000, 500));
+    assert!(s(1000, 950));
+    assert!(!s(1000, 951));
+    assert!(!s(1000, 1000));
+    assert!(!s(0, 0), "nothing read is no evidence");
 }
