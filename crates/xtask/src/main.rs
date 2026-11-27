@@ -10,6 +10,7 @@
 //! cargo xtask changelog note "text"       add a line under Unreleased's Changed
 //! cargo xtask coverage lcov.info          hold the code that changes files to 95%
 //! cargo xtask imports scrimp.exe ...      check programs need nothing but Windows
+//! cargo xtask winget 0.3.0 SHA256SUMS out write the winget manifest for a release
 //! ```
 //!
 //! Ported from Keevoro, so both projects release the same way. It is Rust
@@ -24,6 +25,7 @@
 mod changelog;
 mod coverage;
 mod imports;
+mod winget;
 
 use anyhow::{Context, Result, bail};
 use std::path::Path;
@@ -41,7 +43,8 @@ const USAGE: &str = "Usage:
   cargo xtask changelog release <version>
   cargo xtask changelog note \"what changed\"
   cargo xtask coverage <lcov.info>
-  cargo xtask imports <program>...";
+  cargo xtask imports <program>...
+  cargo xtask winget <version> <SHA256SUMS> <folder>";
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -95,6 +98,11 @@ fn run(args: &[&str], root: &Path) -> Result<()> {
                 })
                 .collect::<Result<Vec<_>>>()?;
             imports::check(&files)?.iter().for_each(|l| println!("{l}"));
+        }
+        ["winget", version, sums, out] => {
+            let sums = std::fs::read_to_string(sums).with_context(|| format!("Couldn't read {sums}"))?;
+            let folder = winget::write(version, &sums, &today(), Path::new(out))?;
+            println!("{} {version}: {}", winget::IDENTIFIER, folder.display());
         }
         ["release"] => cut_release(root, None)?,
         ["release", version] => cut_release(root, Some(version))?,

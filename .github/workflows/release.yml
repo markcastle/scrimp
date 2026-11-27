@@ -404,3 +404,29 @@ jobs:
           fi
           echo "Scrimp v$version is published: https://github.com/${GH_REPO}/releases/tag/v$version"
           echo "### Published: https://github.com/${GH_REPO}/releases/tag/v$version" >> "$GITHUB_STEP_SUMMARY"
+
+  # winget's manifest for this release, written from the SHA256SUMS just
+  # published, so its checksum is the one every download is checked against.
+  # Attached as a zip in winget-pkgs' own folder layout; submitting it to
+  # microsoft/winget-pkgs is a pull request a person makes (docs/developing.md).
+  winget:
+    name: winget manifest
+    needs: [prepare, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refs/tags/v${{ needs.prepare.outputs.version }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Write and attach the manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="${{ needs.prepare.outputs.version }}"
+          gh release download "v$version" --pattern SHA256SUMS --dir sums
+          cargo xtask winget "$version" sums/SHA256SUMS winget
+          (cd winget && zip -qr "../winget-MarkCastle.Scrimp-$version.zip" manifests)
+          gh release upload "v$version" "winget-MarkCastle.Scrimp-$version.zip" --clobber
