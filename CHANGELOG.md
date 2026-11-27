@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.4.0] - 2026-11-27
+
 ### Added
 
 - **Sampling for files Scrimp doesn't recognise.** A large file of an unfamiliar kind is now tested first: Scrimp compresses three small pieces of it in memory, and leaves it alone if they don't shrink. Game archives and disk images that are compressed already are passed over in milliseconds instead of being compressed for nothing. The file itself is never changed by this, and choosing a method yourself skips it.
@@ -43,7 +47,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - **For scripts:** `--json` output, `--dry-run`, `--workers`, and documented exit codes. See [docs/command-line.md](docs/command-line.md).
 - **Settings** in `%LOCALAPPDATA%\Scrimp\settings.json`: the default method, the smallest file worth compressing, what to do with files that change often, and per-extension choices.
 
-[Unreleased]: https://github.com/markcastle/scrimp/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/markcastle/scrimp/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/markcastle/scrimp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/markcastle/scrimp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/markcastle/scrimp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/markcastle/scrimp/releases/tag/v0.1.0
