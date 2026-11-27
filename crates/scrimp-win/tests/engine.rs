@@ -65,7 +65,10 @@ fn a_folder_is_compressed_and_decompressed_with_every_file_intact() {
     add("Holiday.mp4", text(MB));
     add("save.db", text(MB));
     add("tiny.txt", text(100));
+    // Random bytes don't shrink. A large file of an unknown kind is sampled
+    // and left alone; a smaller one is compressed, and Windows refuses it.
     add("random.dat", random(MB));
+    add("random-small.dat", random(MB / 2));
     add("first.pak", text(MB));
     fs::hard_link(games.join("first.pak"), games.join("second.pak")).unwrap();
     let linked = std::os::windows::fs::symlink_file(games.join("notes.txt"), games.join("link.txt")).is_ok();
@@ -84,7 +87,8 @@ fn a_folder_is_compressed_and_decompressed_with_every_file_intact() {
     );
     assert_eq!(outcomes["save.db"], Outcome::Skipped(SkipReason::ChangesOften));
     assert_eq!(outcomes["tiny.txt"], Outcome::Skipped(SkipReason::TooSmall));
-    assert_eq!(outcomes["random.dat"], Outcome::NotBeneficial);
+    assert_eq!(outcomes["random.dat"], Outcome::Skipped(SkipReason::WontShrink));
+    assert_eq!(outcomes["random-small.dat"], Outcome::NotBeneficial);
     let pak: Vec<_> = [&outcomes["first.pak"], &outcomes["second.pak"]].into_iter().collect();
     assert!(
         pak.contains(&&Outcome::Skipped(SkipReason::SameFileAlreadyDone)) && pak.iter().any(|o| algorithm(o).is_some()),
