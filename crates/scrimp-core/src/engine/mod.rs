@@ -130,7 +130,27 @@ pub trait Disk: Sync {
     fn free_space(&self, root: &Path) -> Result<u64, FailReason>;
     fn inspect(&self, path: &Path) -> Result<FileFacts, DiskError>;
     fn compress(&self, path: &Path, algorithm: Algorithm) -> Result<FileFacts, DiskError>;
+    /// Compresses a few pieces of the file in memory, changing nothing, to
+    /// see whether the whole file would shrink.
+    fn sample(&self, path: &Path) -> Result<Sampled, DiskError>;
     fn decompress(&self, path: &Path) -> Result<FileFacts, DiskError>;
+}
+
+/// What compressing a few pieces of a file in memory found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Sampled {
+    /// Bytes read from the file.
+    pub read: u64,
+    /// What they compressed to.
+    pub compressed: u64,
+}
+
+impl Sampled {
+    /// Whether the file looks worth compressing: its samples shrank by at
+    /// least 5%. Less than that rarely survives being stored in clusters.
+    pub fn shrinks(&self) -> bool {
+        self.read > 0 && self.compressed.saturating_mul(100) <= self.read.saturating_mul(95)
+    }
 }
 
 /// How many files are worked on at once on each kind of drive.
@@ -472,15 +492,23 @@ fn process<D: Disk>(path: &Path, drive: &Drive, shared: &Shared<'_, D>, events: 
     }
 
     let skip = |reason| (Outcome::Skipped(reason), facts.on_disk);
-    match shared.policy.plan(path, &facts.state, facts.logical, shared.target) {
+    let plan = shared.policy.plan(path, &facts.state, facts.logical, shared.target);
+    match plan {
         Plan::AlreadyDone => (Outcome::AlreadyDone, facts.on_disk),
         Plan::Skip(reason) => skip(reason),
-        Plan::Compress(algorithm) => {
+        Plan::Compress(algorithm) | Plan::Sample(algorithm) => {
             if let Some(reason) = drive.facts.unsupported(algorithm) {
                 return skip(SkipReason::CantCompressHere(reason.clone()));
             }
             if algorithm.is_wof() && drive.wof_unavailable.load(Ordering::SeqCst) {
                 return skip(SkipReason::CantCompressHere(UnsupportedReason::WofNotRunning));
+            }
+            // A sample that can't be taken decides nothing: the file is
+            // compressed, and Windows still refuses it if it won't shrink.
+            if let Plan::Sample(_) = plan
+                && disk.sample(path).is_ok_and(|s| !s.shrinks())
+            {
+                return skip(SkipReason::WontShrink);
             }
             match disk.compress(path, algorithm) {
                 Ok(after) => (

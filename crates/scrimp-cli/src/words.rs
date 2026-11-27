@@ -39,6 +39,7 @@ pub fn skip_name(reason: &SkipReason) -> &'static str {
         SkipReason::WimBacked => "wimBacked",
         SkipReason::SameFileAlreadyDone => "sameFileAlreadyDone",
         SkipReason::StateUnknown => "stateUnknown",
+        SkipReason::WontShrink => "wontShrink",
         SkipReason::CantCompressHere(r) => unsupported_name(r),
     }
 }

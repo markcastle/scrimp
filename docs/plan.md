@@ -318,7 +318,7 @@ If Windows reports `ERROR_COMPRESSION_NOT_BENEFICIAL`, record `NotBeneficial` an
 
 The rules live in code as a versioned table. Users can override extensions in `settings.json`. An explicit algorithm choice from the menu or CLI always wins over the policy, except for rule 1.
 
-**Version 1.1 adds sampling.** Before compressing an unknown file, compress a few 64 KB samples in memory using the Windows Compression API (`compressapi.h`, part of Windows) and skip files that don't shrink. This keeps the "no external engines" principle and catches incompressible files with unhelpful extensions.
+**Sampling.** Before compressing a file of an unknown kind of 1 MB or more, Scrimp compresses three 64 KB samples (start, middle, end) in memory using the Windows Compression API (`compressapi.h`, part of Windows), in 8 KB blocks as XPRESS8K does, and skips the file if they shrink by less than 5%. This keeps the "no external engines" principle and catches incompressible files with unhelpful extensions. A sample that can't be taken decides nothing: the file is compressed, and Windows still refuses it if it won't shrink. Added in 0.4.
 
 ## 7. Command-line interface
 

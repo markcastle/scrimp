@@ -12,6 +12,8 @@ scrimp compress "D:\Games"
 
 Compresses every file in the folder and the folders inside it, choosing a method for each kind of file. Links are never followed. Photos, videos and archives are left alone, because they're already compressed, and so are files that change often, such as virtual disks and databases, because Windows would undo the saving the next time they change.
 
+A large file of a kind Scrimp doesn't recognise, 1 MB or more, is sampled first: Scrimp compresses three small pieces of it in memory, and leaves the file alone if they don't shrink. Many such files (game archives, disk images) are compressed already, and this finds out in milliseconds rather than after compressing the whole file. Sampling never changes the file, and it's skipped when you choose a method yourself. In `--json`, a file left alone this way has the reason `wontShrink`.
+
 To choose the method yourself:
 
 ```powershell

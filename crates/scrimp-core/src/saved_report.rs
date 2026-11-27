@@ -108,6 +108,7 @@ fn skip_why(reason: &SkipReason) -> String {
         SkipReason::CantCompressHere(r) => sentence(&r.plain()),
         SkipReason::SameFileAlreadyDone => "Another name for a file already handled".into(),
         SkipReason::StateUnknown => "Scrimp couldn't tell how it's stored".into(),
+        SkipReason::WontShrink => "A sample of it didn't get any smaller".into(),
     }
 }
 
@@ -213,6 +214,7 @@ mod tests {
             SkipReason::WimBacked,
             SkipReason::SameFileAlreadyDone,
             SkipReason::StateUnknown,
+            SkipReason::WontShrink,
             SkipReason::CantCompressHere(UnsupportedReason::FileSystem("exFAT".into())),
         ] {
             let why = skip_why(&reason);

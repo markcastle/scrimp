@@ -47,6 +47,9 @@ pub enum SkipReason {
     SameFileAlreadyDone,
     /// The file's state couldn't be read, so it was left alone.
     StateUnknown,
+    /// A sample of it didn't shrink, so it would save nothing. Only for
+    /// large files of a kind Scrimp doesn't know, in automatic mode.
+    WontShrink,
 }
 
 /// Why changing a file failed.

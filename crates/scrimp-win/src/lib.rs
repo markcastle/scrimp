@@ -45,6 +45,8 @@ pub mod menu;
 mod path;
 #[cfg(windows)]
 pub mod registry;
+#[cfg(windows)]
+mod sample;
 #[cfg(all(windows, feature = "ui"))]
 pub mod ui;
 #[cfg(windows)]
@@ -60,5 +62,7 @@ pub use elevation::{is_elevated, run_as_administrator};
 pub use file::{FileInfo, compress, decompress, inspect};
 #[cfg(windows)]
 pub use instance::SingleInstance;
+#[cfg(windows)]
+pub use sample::{Sample, sample};
 #[cfg(windows)]
 pub use volume::{DriveType, VolumeInfo, volume};

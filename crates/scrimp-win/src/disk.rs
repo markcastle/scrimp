@@ -3,7 +3,9 @@
 
 use std::path::{Path, PathBuf};
 
-use scrimp_core::{Algorithm, Disk, DiskError, EntryKind, FailReason, FileFacts, FileId, Storage, VolumeFacts};
+use scrimp_core::{
+    Algorithm, Disk, DiskError, EntryKind, FailReason, FileFacts, FileId, Sampled, Storage, VolumeFacts,
+};
 
 use crate::error::Error;
 use crate::file::{self, FileInfo};
@@ -104,6 +106,15 @@ impl Disk for WindowsDisk {
 
     fn decompress(&self, path: &Path) -> Result<FileFacts, DiskError> {
         file::decompress(path).map(facts).map_err(disk_error)
+    }
+
+    fn sample(&self, path: &Path) -> Result<Sampled, DiskError> {
+        crate::sample::sample(path)
+            .map(|s| Sampled {
+                read: s.read,
+                compressed: s.compressed,
+            })
+            .map_err(disk_error)
     }
 }
 
