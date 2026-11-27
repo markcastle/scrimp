@@ -75,7 +75,7 @@ Each of these follows [docs/windows-api.md](docs/windows-api.md).
 - [x] NSIS installer, per user, with `--register --add-to-path` and `--unregister`, tested install, reinstall and uninstall in CI
 - [x] `scrimp update`, adapted from `keevoro-update`: hands over to the installer, or swaps `scrimp.exe` for a command-line-only install
 
-## Phase 6: Hardening, released as 1.0
+## Phase 6: Hardening
 
 - [ ] Everything in the MVP definition of done, [docs/plan.md section 17](docs/plan.md#17-mvp-definition-of-done): every item but the two that need Explorer itself, which wait on S6 below
 - [x] CI holds the code that changes files to 95% of lines (`cargo xtask coverage`)
@@ -83,6 +83,15 @@ Each of these follows [docs/windows-api.md](docs/windows-api.md).
 - [x] Honest reporting on mounted VHDX drives
 - [x] Dev Drives called by name
 - [x] An SBOM for each program on every release
+
+## Next
+
+1.0 waits until Scrimp has been used for a while. Until then, releases stay at 0.x.
+
+- [x] A winget manifest with each release (`cargo xtask winget`), checked against winget's schemas
+- [ ] The first version submitted to microsoft/winget-pkgs (a person's pull request; docs/developing.md)
+- [ ] Sampling in automatic mode: skip files whose samples won't shrink
+- [ ] Code signing, then Windows 11's first menu
 
 ## Tried by a person
 

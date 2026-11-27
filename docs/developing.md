@@ -149,6 +149,7 @@ Each release carries:
 | `scrimp-windows-x64.exe` | The command line on its own, for `install.ps1` |
 | `sbom-scrimp.cdx.json`, `sbom-scrimpw.cdx.json`, `sbom-scrimp_shell.cdx.json` | Software bills of materials (CycloneDX): every crate in each program, with its version and licence, for answering "is Scrimp affected?" when a crate has a security problem |
 | `SHA256SUMS` | Checking any of the above arrived intact |
+| `winget-MarkCastle.Scrimp-<version>.zip` | The manifest for winget, added just after the release opens (below) |
 
 ### The installer
 
@@ -168,6 +169,37 @@ CI's `installer` job runs `scripts/test-installer.ps1`: a silent install into a 
 4. **The registry value keeps its type.** PATH is usually `REG_EXPAND_SZ`. PowerShell's `[Environment]::SetEnvironmentVariable` reads it with variables expanded and writes it back as a plain string, which hard-codes those variables. `install.ps1` uses the registry directly instead.
 5. **Running programs are told.** `WM_SETTINGCHANGE` is broadcast, so new terminal windows see the change without signing out.
 6. **Uninstalling removes only Scrimp's entry**, matched by the same rules.
+
+### winget
+
+[winget](https://learn.microsoft.com/windows/package-manager/) installs from manifests in Microsoft's public repository, [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs). Scrimp's package is `MarkCastle.Scrimp`. Once a version is there, anyone can run:
+
+```powershell
+winget install MarkCastle.Scrimp
+```
+
+The Release workflow writes each version's manifest with `cargo xtask winget`, from the release's own `SHA256SUMS`, and attaches it as `winget-MarkCastle.Scrimp-<version>.zip`. It runs the installer the way `scrimp update` does: per user, quietly, with `/S`. Getting a version into winget is a pull request to winget-pkgs, which Microsoft's checks and a reviewer approve, usually within a few days. It's made by a person, because it's made from their GitHub account:
+
+1. Unzip the manifest. It holds `manifests/m/MarkCastle/Scrimp/<version>/`, the same path it takes in winget-pkgs.
+2. Check it on a Windows PC with winget, which installs Scrimp from it exactly as winget would:
+
+   ```powershell
+   winget validate --manifest manifests\m\MarkCastle\Scrimp\<version>
+   ```
+
+   ```powershell
+   winget install --manifest manifests\m\MarkCastle\Scrimp\<version>
+   ```
+
+3. Submit it, with Microsoft's [wingetcreate](https://github.com/microsoft/winget-create) and a GitHub token that can make pull requests:
+
+   ```powershell
+   wingetcreate submit --token <token> manifests\m\MarkCastle\Scrimp\<version>
+   ```
+
+   Or fork winget-pkgs, copy the folder to the same path, and open a pull request by hand.
+
+`winget upgrade` then moves people up as new versions are merged, alongside `scrimp update`.
 
 ## Scrimp is not signed yet
 
